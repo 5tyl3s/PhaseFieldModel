@@ -28,6 +28,10 @@ config inputConfig() {
         configOut << "  \"cellHeightum\": 100,\n";
         configOut << "  \"cellWidthum\": 100,\n";
         configOut << "  \"particleVolumeFraction\": 0.01\n";
+        configOut << "  \"LiqSolIntEnergyJm2\": 0.3\n";
+        configOut << "  \"LiqSolIntWidthum\": 0.3\n";
+        configOut << "  \"GrainIntEnergyJm2\": 0.3\n";
+        configOut << "  \"GrainIntWidthum\": 0.3\n";
         configOut << "}\n";
         configOut.close();
         std::cout << "Default Config Created. Please Edit and Rerun Program";
@@ -46,6 +50,10 @@ config inputConfig() {
     newConfig.cellHeight = j["cellHeightum"];
     newConfig.cellWidth = j["cellWidthum"];
     newConfig.particleVolFraction = j["particleVolumeFraction"];
+    newConfig.liqSolIntE = j["LiqSolIntEnergyJm2"];
+    newConfig.liqSolIntWidth = j["LiqSolIntWidthum"];
+    newConfig.phaseCoefficient = 0.75*newConfig.liqSolIntWidth * newConfig.liqSolIntE;
+
     newConfig.success = 1;
  
 

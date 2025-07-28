@@ -15,15 +15,24 @@ struct config {
     double startTemp; //K
     double cellWidth;//um
     double cellHeight;//um
+    double cellArea = cellHeight * cellWidth;
     double particleVolFraction;
+    double liqSolIntWidth; //um
+    double grainIntWidth; //um
+
     int totalSteps;
+    double liqSolIntE;
+    double grainIntE;
     std::array<int,2> steps;
+    double phaseCoefficient;
 };
 
 
 
 
 config inputConfig();
+
+
 struct node {
     double temp;
     double phase;
