@@ -4,5 +4,6 @@
   "startTempK": 3000,
   "solidConductivityWMK": 138,
   "cellHeightum": 100,
-  "cellWidthum": 100
+  "cellWidthum": 100,
+  "particleVolumeFraction": 0.01
 }
