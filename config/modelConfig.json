@@ -1,9 +1,16 @@
 {
   "dx_um": 0.5,
+  "meltTemp": 2896,
   "dt_s": 0.001,
   "startTempK": 3000,
   "solidConductivityWMK": 138,
   "cellHeightum": 100,
   "cellWidthum": 100,
-  "particleVolumeFraction": 0.01
+  "particleVolumeFraction": 0.01,
+  "LiqSolIntEnergyJm2": 0.3,
+  "LiqSolIntWidthum": 0.3,
+  "GrainIntEnergyJm2": 0.3,
+  "GrainIntWidthum": 0.3,
+  "PhaseBarrierHeightCoefficient": 0.25,
+  "GrainBarrierHeightCoefficient": 0.125
 }

@@ -47,13 +47,18 @@ struct node {
     node* neighbors[4]; //x-1,x+1,y-1,y+1
 };
 
+struct eulerAngles {
+    double theta1;
+    double phi;
+    double theta2;
+};
 struct gridField {
     std::vector<std::vector<node>> grid;
     void buildGrid(int heightSteps, int widthSteps);
     void init(config modelConfig);
     
     std::vector<int> grains;
-    std::vector<std::vector<double>> orientation; // Theta1 Phi Theta2 Euler Angles
+    eulerAngles orientation; // Theta1 Phi Theta2 Euler Angles
     std::random_device rd;
 
     static gridField addGrain(std::array<int,2> nucleus);

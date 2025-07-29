@@ -28,12 +28,12 @@ config inputConfig() {
         configOut << "  \"solidConductivityWMK\": 138,\n";
         configOut << "  \"cellHeightum\": 100,\n";
         configOut << "  \"cellWidthum\": 100,\n";
-        configOut << "  \"particleVolumeFraction\": 0.01\n";
-        configOut << "  \"LiqSolIntEnergyJm2\": 0.3\n";
-        configOut << "  \"LiqSolIntWidthum\": 0.3\n";
-        configOut << "  \"GrainIntEnergyJm2\": 0.3\n";
-        configOut << "  \"GrainIntWidthum\": 0.3\n";
-        configOut << "  \"PhaseBarrierHeightCoefficient\": 0.25\n";
+        configOut << "  \"particleVolumeFraction\": 0.01,\n";
+        configOut << "  \"LiqSolIntEnergyJm2\": 0.3,\n";
+        configOut << "  \"LiqSolIntWidthum\": 0.3,\n";
+        configOut << "  \"GrainIntEnergyJm2\": 0.3,\n";
+        configOut << "  \"GrainIntWidthum\": 0.3,\n";
+        configOut << "  \"PhaseBarrierHeightCoefficient\": 0.25,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
 
         configOut << "}\n";
