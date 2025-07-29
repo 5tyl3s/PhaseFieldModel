@@ -57,11 +57,20 @@ struct gridField {
     void buildGrid(int heightSteps, int widthSteps);
     void init(config modelConfig);
     
-    std::vector<int> grains;
+    int numGrains;
     eulerAngles orientation; // Theta1 Phi Theta2 Euler Angles
     std::random_device rd;
 
-    static gridField addGrain(std::array<int,2> nucleus);
+    void addGrain(std::array<int,2> nucleus) {
+        numGrains = numGrains + 1;
+
+    for (int i = 1; i < grid.size()-1; i++) {
+        for (int j = 1; j < grid[1].size()-1; j++) {
+            grid[i][j].grainPhases.push_back(0);
+        }
+    }
+    grid[nucleus[0]][nucleus[1]].grainPhases[numGrains - 1] = 1.0;
+    };
        
     
  
