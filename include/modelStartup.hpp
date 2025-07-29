@@ -6,7 +6,8 @@
 
 
 struct config {
-    
+
+    double meltTemp; //K
     double dx; //um
     double dt; //s
     double kSolid; //W/m*k
@@ -25,6 +26,10 @@ struct config {
     double grainIntE;
     std::array<int,2> steps;
     double phaseCoefficient;
+    double barrierHeightPhase;
+    double barrierHeightGrain;
+    double phasePreCo = 0.75*liqSolIntE/(barrierHeightPhase*liqSolIntWidth);
+    double grainPreCo = 0.75*grainIntE/(barrierHeightGrain*grainIntWidth);
 };
 
 

@@ -22,6 +22,7 @@ config inputConfig() {
         }
         configOut << "{\n";
         configOut << "  \"dx_um\": 0.5,\n";
+        configOut << "  \"meltTemp\": 2896,\n";
         configOut << "  \"dt_s\": 0.001,\n";
         configOut << "  \"startTempK\": 3000,\n";
         configOut << "  \"solidConductivityWMK\": 138,\n";
@@ -32,6 +33,9 @@ config inputConfig() {
         configOut << "  \"LiqSolIntWidthum\": 0.3\n";
         configOut << "  \"GrainIntEnergyJm2\": 0.3\n";
         configOut << "  \"GrainIntWidthum\": 0.3\n";
+        configOut << "  \"PhaseBarrierHeightCoefficient\": 0.25\n";
+        configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
+
         configOut << "}\n";
         configOut.close();
         std::cout << "Default Config Created. Please Edit and Rerun Program";
@@ -53,6 +57,9 @@ config inputConfig() {
     newConfig.liqSolIntE = j["LiqSolIntEnergyJm2"];
     newConfig.liqSolIntWidth = j["LiqSolIntWidthum"];
     newConfig.phaseCoefficient = 0.75*newConfig.liqSolIntWidth * newConfig.liqSolIntE;
+    newConfig.barrierHeightGrain = j["GrainBarrierHeightCoefficient"];
+    newConfig.barrierHeightPhase = j["PhaseBarrierHeightCoefficient"];
+    newConfig.meltTemp = j["meltTemp"];
 
     newConfig.success = 1;
  
