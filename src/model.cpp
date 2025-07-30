@@ -3,9 +3,7 @@
 #include "modelStartup.hpp"
 #include <cmath>
 
-void say_hello() {
-    std::cout << "Hello From Model"<< std::endl;
-}
+
 
 
 
@@ -21,13 +19,14 @@ std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config mod
 
         }
     }
+    return diffFree; 
 
 
 
 }
 
 std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField field, config modelConfig) {
-    std::vector<std::vector<double>> diffFree;
+    std::vector<std::vector<std::vector<double>>> diffFree;
     double gra;
     double graEnergy;
     for (int i = 0; i < modelConfig.steps[0]-1; i++) {
@@ -36,11 +35,12 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
                 gra = field.grid[i][j].grainPhases[g];
                 graEnergy = modelConfig.grainPreCo*((field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]-field.grid[i][j].grainPhases[g])+(2*gra*compOtherGrains(g,field.grid[i][j]))+(2*field.grid[i][j].grainPhases[g]*field.grid[i][j].particleComp*modelConfig.particleSlowingCoefficient))+(modelConfig.grainIntWidth*calcGrainBoundaryEnergy(field.orientations[g],{field.grid[i][j].neighbors[0]->phase+field.grid[i][j].neighbors[1]->phase - 2*field.grid[i][j].phase,field.grid[i][j].neighbors[2]->phase+field.grid[i][j].neighbors[3]->phase - 2*field.grid[i][j].phase}))*(field.grid[i][j].neighbors[0]->grainPhases[g] +field.grid[i][j].neighbors[1]->grainPhases[g] +field.grid[i][j].neighbors[2]->grainPhases[g] +field.grid[i][j].neighbors[3]->grainPhases[g] -4);
 
-                diffFree[i][j] = diffFree[i][j]+graEnergy;
+                diffFree[i][j][g] = diffFree[i][j][g]+graEnergy;
             }
 
         }
     }
+    return diffFree;
 }
 
 double compOtherGrains(int notIndex,node Node) {
@@ -48,7 +48,8 @@ double compOtherGrains(int notIndex,node Node) {
     for (int gr = 0; gr < size(Node.grainPhases);gr++) {
         notThisGrain = notThisGrain + Node.grainPhases[gr];
     }
-    notThisGrain = notThisGrain-Node.grainPhases[notIndex];
+    return notThisGrain-Node.grainPhases[notIndex];
+    
 }
 
 
@@ -76,19 +77,18 @@ std::vector<std::vector<double>> calcFreeEnergy(gridField field,config modelConf
 
         }
     }
+    return freeEnVec;
 
 
 }
 
 double calcLocalFree(node nodeLoc, config mConfig) {
-    double energyPhase = mConfig.phasePreCo*(((1-nodeLoc.phase)*(1-nodeLoc.phase)*(ifLiq(nodeLoc.temp,mConfig.meltTemp)))+(nodeLoc.phase*nodeLoc.phase*(1-ifLiq(nodeLoc.temp,mConfig.meltTemp))));
-
-
+    return mConfig.phasePreCo*(((1-nodeLoc.phase)*(1-nodeLoc.phase)*(ifLiq(nodeLoc.temp,mConfig.meltTemp)))+(nodeLoc.phase*nodeLoc.phase*(1-ifLiq(nodeLoc.temp,mConfig.meltTemp))));
 }
 double ifLiq(double temp, double meltTemp) {
     //0 Above melt, 1 below
-    double liqVal = 0.5*(1-(tanh((temp/meltTemp)-1)));
-    return liqVal;
+    return 0.5*(1-(tanh((temp/meltTemp)-1)));
+
 
 }
 
@@ -113,6 +113,9 @@ double calcGrainBoundaryEnergy(eulerAngles orient, std::array<double,2> gradient
     } else {
         return 3.192;
     }
+    std::cerr << "Grain Boundary Calculation Failed See model.cpp";
+    return 999;
+
 
 
 }
