@@ -30,6 +30,8 @@ struct config {
     double barrierHeightGrain;
     double phasePreCo = 0.75*liqSolIntE/(barrierHeightPhase*liqSolIntWidth);
     double grainPreCo = 0.75*grainIntE/(barrierHeightGrain*grainIntWidth);
+    double particleSlowingCoefficient = 0;
+    double phaseGradCo = 0.75*liqSolIntE*liqSolIntWidth;
 };
 
 
@@ -58,20 +60,11 @@ struct gridField {
     void init(config modelConfig);
     
     int numGrains;
-    eulerAngles orientation; // Theta1 Phi Theta2 Euler Angles
-    std::random_device rd;
+    std::vector<eulerAngles> orientations; // Theta1 Phi Theta2 Euler Angles
 
-    void addGrain(std::array<int,2> nucleus) {
-        numGrains = numGrains + 1;
+    void addGrain(std::array<int,2> nucleus);
 
-    for (int i = 1; i < grid.size()-1; i++) {
-        for (int j = 1; j < grid[1].size()-1; j++) {
-            grid[i][j].grainPhases.push_back(0);
-        }
-    }
-    grid[nucleus[0]][nucleus[1]].grainPhases[numGrains - 1] = 1.0;
-    };
-       
+   
     
  
     

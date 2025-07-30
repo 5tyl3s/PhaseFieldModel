@@ -122,4 +122,21 @@ void gridField::init(config modelConfig) {
         };
     }
 }
+
+
+void gridField::addGrain(std::array<int,2> nucleus) {
+    numGrains = numGrains + 1;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::normal_distribution<> dist(45,45);
+
+    for (int i = 1; i < grid.size()-1; i++) {
+        for (int j = 1; j < grid[1].size()-1; j++) {
+            grid[i][j].grainPhases.push_back(0);
+        }
+    }
+    grid[nucleus[0]][nucleus[1]].grainPhases[numGrains - 1] = 1.0;
+    orientations[numGrains] = {dist(gen),dist(gen),dist(gen)};
+}
+       
       
