@@ -24,7 +24,7 @@ struct config {
     int totalSteps;
     double liqSolIntE;
     double grainIntE;
-    std::array<int,2> steps;
+    std::vector<int> steps;
     double phaseCoefficient;
     double barrierHeightPhase;
     double barrierHeightGrain;
@@ -70,12 +70,8 @@ struct gridField {
     node bottom;
 
 
-    void addGrain(std::array<int,2> nucleus);
+    void addGrain(std::vector<int> nucleus);
 
-   
-    
- 
-    
 };
 
 

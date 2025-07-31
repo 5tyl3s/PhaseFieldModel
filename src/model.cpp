@@ -9,17 +9,25 @@
 
 
 std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config modelConfig) {
-    std::vector<std::vector<double>> diffFree;
+    std::vector<std::vector<double>> diffFree(modelConfig.steps[0],std::vector<double>(modelConfig.steps[1]));
     double pha;
-    for (int i = 0; i < modelConfig.steps[0]-1; i++) {
-        for (int j = 0; j < modelConfig.steps[1]-1; j++) {
-            pha = field.grid[i][j].phase;
-            std::cout << "\n" << pha << std::endl;
-            diffFree[i][j] = modelConfig.phaseCoefficient*(((2*pha-2)*(ifLiq(field.grid[i][j].temp,modelConfig.meltTemp)))+(2*pha*(1-ifLiq(field.grid[i][j].temp,modelConfig.meltTemp)))+(2*pha*(modelConfig.particleSlowingCoefficient*field.grid[i][j].particleComp)))+(field.grid[i][j].neighbors[0]->phase +field.grid[i][j].neighbors[1]->phase +field.grid[i][j].neighbors[2]->phase +field.grid[i][j].neighbors[3]->phase -4)*modelConfig.phaseGradCo;
+    for (int ii = 0; ii < modelConfig.steps[0]-1; ii++) {
+        for (int jj = 0; jj < modelConfig.steps[1]-1; jj++) {
+            pha = field.grid[ii][jj].phase;
+            //std::cout << pha;
+            std::cout << "\ni" << ii << "j" << jj << std::endl;
+            std::cout << ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp) << std::endl;
+            std::cout << field.grid[ii][jj].neighbors[0]->phase << "  ";
+            std::cout << field.grid[ii][jj].neighbors[1]->phase << "  ";
+            std::cout << field.grid[ii][jj].neighbors[2]->phase << "  ";
+            std::cout << field.grid[ii][jj].neighbors[3]->phase << "  " << std::endl;
+            std::cout << field.grid[ii][jj].particleComp;
+            diffFree[ii][jj] = modelConfig.phaseCoefficient*(((2*pha-2)*(ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp)))+(2*pha*(1-ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp)))+(2*pha*(modelConfig.particleSlowingCoefficient*field.grid[ii][jj].particleComp)))+(field.grid[ii][jj].neighbors[0]->phase +field.grid[ii][jj].neighbors[1]->phase +field.grid[ii][jj].neighbors[2]->phase +field.grid[ii][jj].neighbors[3]->phase -4)*modelConfig.phaseGradCo;
             
 
         }
     }
+    std::cout << "calcDiffFree";
     return diffFree; 
 
 
@@ -27,15 +35,14 @@ std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config mod
 }
 
 std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField field, config modelConfig) {
-    std::vector<std::vector<std::vector<double>>> diffFree;
+    std::vector<std::vector<std::vector<double>>> diffFree(modelConfig.steps[0],std::vector<std::vector<double>>(modelConfig.steps[1],std::vector<double>(field.numGrains)));
     double gra;
     double graEnergy;
     for (int i = 0; i < modelConfig.steps[0]-1; i++) {
         for (int j = 0; j < modelConfig.steps[1]-1; j++) {
-            for (int g = 0; g < field.numGrains; g++){
+            for (int g = 0; g < field.numGrains-1; g++){
                 gra = field.grid[i][j].grainPhases[g];
                 graEnergy = modelConfig.grainPreCo*((field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]-field.grid[i][j].grainPhases[g])+(2*gra*compOtherGrains(g,field.grid[i][j],field.numGrains))+(2*field.grid[i][j].grainPhases[g]*field.grid[i][j].particleComp*modelConfig.particleSlowingCoefficient))+(modelConfig.grainIntWidth*calcGrainBoundaryEnergy(field.orientations[g],{field.grid[i][j].neighbors[0]->phase+field.grid[i][j].neighbors[1]->phase - 2*field.grid[i][j].phase,field.grid[i][j].neighbors[2]->phase+field.grid[i][j].neighbors[3]->phase - 2*field.grid[i][j].phase}))*(field.grid[i][j].neighbors[0]->grainPhases[g] +field.grid[i][j].neighbors[1]->grainPhases[g] +field.grid[i][j].neighbors[2]->grainPhases[g] +field.grid[i][j].neighbors[3]->grainPhases[g] -4);
-
                 diffFree[i][j][g] = diffFree[i][j][g]+graEnergy;
             }
 
@@ -46,7 +53,7 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
 
 
 std::vector<std::vector<double>> calcTempDiff(gridField field, config modelConfig) {
-    std::vector<std::vector<double>> tempDiff;
+    std::vector<std::vector<double>> tempDiff(modelConfig.steps[0],std::vector<double>(modelConfig.steps[1]));
 
     for (int j = 0; j<modelConfig.steps[0]-1;j++) {
         tempDiff[0][j] = field.grid[0][j].neighbors[0]->temp + field.grid[0][j].neighbors[1]->temp + field.grid[0][j].neighbors[4]->temp - (3*field.grid[0][j].temp);
@@ -136,14 +143,14 @@ double ifLiq(double temp, double meltTemp) {
 
 }
 
-double calcGrainBoundaryEnergy(eulerAngles orient, std::array<double,2> gradient) {
-    std::array<double, 3> gradNormal = {-1*gradient[1],1*gradient[0],0};
-    std::array<double, 3> surfPlaneVec =eulerRotate(orient,gradNormal);
+double calcGrainBoundaryEnergy(eulerAngles orient, std::vector<double> gradient) {
+    std::vector<double> gradNormal = {-1*gradient[1],1*gradient[0],0};
+    std::vector<double> surfPlaneVec =eulerRotate(orient,gradNormal);
     std::cout << surfPlaneVec[0] << ' ' << surfPlaneVec[1] << ' ' << surfPlaneVec[2] << std::endl;
 
-    double angle110 = dotAngle(surfPlaneVec,std::array<double,3> {1,1,0});
-    double angle111 = dotAngle(surfPlaneVec,std::array<double,3> {1,1,1});
-    double angle100 = dotAngle(surfPlaneVec,std::array<double,3> {1,0,0});
+    double angle110 = dotAngle(surfPlaneVec,std::vector<double> {1,1,0});
+    double angle111 = dotAngle(surfPlaneVec,std::vector<double> {1,1,1});
+    double angle100 = dotAngle(surfPlaneVec,std::vector<double> {1,0,0});
 
     if (angle110 < angle111) {
         if (angle110 < angle100) {
@@ -178,7 +185,7 @@ double calcGrainBoundaryEnergy(eulerAngles orient, std::array<double,2> gradient
 
 
 //Math Equations
-std::array<double,3> eulerRotate(eulerAngles orient, std::array<double,3> rotatedVector) {
+std::vector<double> eulerRotate(eulerAngles orient, std::vector<double> rotatedVector) {
     double c1 = std::cos(orient.theta1), s1 = std::sin(orient.theta1);
     double cP = std::cos(orient.phi),  sP = std::sin(orient.phi);
     double c2 = std::cos(orient.theta2), s2 = std::sin(orient.theta2);
@@ -207,7 +214,7 @@ std::array<double,3> eulerRotate(eulerAngles orient, std::array<double,3> rotate
 
 }
 
-double dotAngle(std::array<double,3> vec1, std::array<double,3> vec2) {
+double dotAngle(std::vector<double> vec1, std::vector<double> vec2) {
     double adotb = vec1[0]*vec2[0]+vec1[1]*vec2[1]+vec1[2]*vec2[2];
     double mag1 = std::sqrt((vec1[0]*vec1[0])+(vec1[1]*vec1[1])+(vec1[2]*vec1[2]));
     double mag2 = std::sqrt((vec2[0]*vec2[0])+(vec2[1]*vec2[1])+(vec2[2]*vec2[2]));

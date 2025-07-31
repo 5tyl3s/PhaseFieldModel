@@ -74,7 +74,7 @@ config inputConfig() {
 
 
     int width = static_cast<int>(std::ceil(newConfig.cellWidth / newConfig.dx));
-    std::array<int,2> steps = {height,width};
+    std::vector<int> steps = {height,width};
     newConfig.steps = steps;
 
 
@@ -146,6 +146,7 @@ void gridField::init(config modelConfig) {
     top.phase = 0.00;
     bottom.grainPhases = {};
     bottom.phase = 1.00;
+    numGrains = 0;
 
     for (int i = 0; i < modelConfig.steps[0]; i++) {
         for (int j = 0; j < modelConfig.steps[1]; j++) {
@@ -157,8 +158,9 @@ void gridField::init(config modelConfig) {
 }
 
 
-void gridField::addGrain(std::array<int,2> nucleus) {
+void gridField::addGrain(std::vector<int> nucleus) {
     numGrains = numGrains + 1;
+    std::cout << "\n" << numGrains << "Grains" << std::endl;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::normal_distribution<> dist(45,45);
@@ -168,10 +170,15 @@ void gridField::addGrain(std::array<int,2> nucleus) {
             grid[i][j].grainPhases.push_back(0);
         }
     }
-    top.grainPhases.push_back(0);
-    bottom.grainPhases.push_back(0);
+
+    top.grainPhases.push_back(0.0);
+    bottom.grainPhases.push_back(0.0);
+
     grid[nucleus[0]][nucleus[1]].grainPhases[numGrains - 1] = 1.0;
-    orientations[numGrains] = {dist(gen),dist(gen),dist(gen)};
+
+    eulerAngles tempRots = {dist(gen),dist(gen),dist(gen)};
+    orientations.push_back(tempRots);
+
 }
        
       

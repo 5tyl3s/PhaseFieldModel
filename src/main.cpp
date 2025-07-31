@@ -17,13 +17,19 @@ int main() {
 
     gridField model;
     model.init(configData);
-    std::vector<std::vector<std::vector<double>>> grainDiffEn;
-    std::vector<std::vector<double>> phaseDiffEn;
+    std::vector<std::vector<std::vector<double>>> grainDiffEn(configData.steps[0],std::vector<std::vector<double>>(configData.steps[1],std::vector<double>(model.numGrains)));
+    std::vector<std::vector<double>> phaseDiffEn(configData.steps[0],std::vector<double>(configData.steps[1]));
     std::vector<std::vector<double>> tempGrad;
+    std::vector<int> nucLoc = {20,20};
+
+    std::cout << nucLoc[0];
+    model.addGrain(nucLoc);
+    std::cout << "GrainAdded";
+
 
 
     for (int t = 0; t < 5; t++) {
-        std::cout << t;
+        std::cout << "\n"<<t<< "\n";
         grainDiffEn = calcGrainDiffEnergy(model,configData);
         std::cout << "GrainEnDone\n";
 
