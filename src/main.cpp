@@ -23,13 +23,14 @@ int main() {
 
 
     for (int t = 0; t < 5; t++) {
-    grainDiffEn = calcGrainDiffEnergy(model,configData);
-    std::cout << "GrainEnDone\n";
+        std::cout << t;
+        grainDiffEn = calcGrainDiffEnergy(model,configData);
+        std::cout << "GrainEnDone\n";
 
-    phaseDiffEn = calcPhaseDiffEnergy(model,configData);
-    std::cout << "PhaseEnDone\n";
-    tempGrad = calcTempDiff(model,configData);
-    std::cout << "TempDone\n";
+        phaseDiffEn = calcPhaseDiffEnergy(model,configData);
+        std::cout << "PhaseEnDone\n";
+        tempGrad = calcTempDiff(model,configData);
+        std::cout << "TempDone\n";
     
     }
     std::string fileName = "TempGrid";
