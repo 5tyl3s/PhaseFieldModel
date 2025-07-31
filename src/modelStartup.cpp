@@ -34,6 +34,7 @@ config inputConfig() {
         configOut << "  \"GrainIntEnergyJm2\": 0.3,\n";
         configOut << "  \"GrainIntWidthum\": 0.3,\n";
         configOut << "  \"PhaseBarrierHeightCoefficient\": 0.25,\n";
+        configOut << "  \"BasePlateTempK\": 500,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
 
         configOut << "}\n";
@@ -59,6 +60,7 @@ config inputConfig() {
     newConfig.phaseCoefficient = 0.75*newConfig.liqSolIntWidth * newConfig.liqSolIntE;
     newConfig.barrierHeightGrain = j["GrainBarrierHeightCoefficient"];
     newConfig.barrierHeightPhase = j["PhaseBarrierHeightCoefficient"];
+    newConfig.basePlateTemp = j["BasePlateTempK"];
     newConfig.meltTemp = j["meltTemp"];
 
     newConfig.success = 1;
@@ -93,15 +95,42 @@ void gridField::buildGrid(int widthSteps, int heightSteps) {
     std::cout << widthSteps << " wide " << heightSteps << " Tall" << std::endl;
     grid.resize(heightSteps,std::vector<node>(widthSteps));
 
-    for (int i = 0; i< heightSteps;i++) {
-        for (int j = 0; j < widthSteps;j++) {
+
+ 
+  
+    
+
+    for (int j = 0; j< widthSteps-1;j++) {
+        node& gp = grid[0][j];
+        gp.neighbors[0] = (j>0) ? &grid[0][j-1]:&grid[0][widthSteps-1]; //Left
+        gp.neighbors[1] = (j<widthSteps-1) ? &grid[0][j+1]:&grid[0][0]; //Right
+        gp.neighbors[2] =&top;
+        gp.neighbors[3] = &grid[1][j]; //Down
+        
+    }
+
+    for (int i = 1; i< heightSteps-2;i++) {
+        for (int j = 0; j < widthSteps-1;j++) {
             node& gp = grid[i][j];
             gp.neighbors[0] = (j>0) ? &grid[i][j-1]:&grid[i][widthSteps-1]; //Left
             gp.neighbors[1] = (j<widthSteps-1) ? &grid[i][j+1]:&grid[i][0]; //Right
-            gp.neighbors[2] = (i>0) ? &grid[i-1][j]: nullptr;
+            gp.neighbors[2] = (i>0) ? &grid[i-1][j]: nullptr;//up
             gp.neighbors[3] = (i<heightSteps-1) ? &grid[i+1][j]: nullptr; //Down
         };
     };
+
+    for (int j = 0; j< widthSteps-1;j++) {
+        node& gp = grid[heightSteps-1][j];
+        gp.neighbors[0] = (j>0) ? &grid[heightSteps-1][j-1]:&grid[heightSteps-1][widthSteps-1]; //Left
+        gp.neighbors[1] = (j<widthSteps-1) ? &grid[heightSteps-1][j+1]:&grid[heightSteps-1][0]; //Right
+        gp.neighbors[2] = &grid[heightSteps-2][j];
+        gp.neighbors[3] = &bottom; //Down
+        
+    }
+
+
+
+
 
 };
 
@@ -113,6 +142,10 @@ void gridField::init(config modelConfig) {
     std::mt19937 gen(rd());
     std::normal_distribution<> dist(0.0,25);
     buildGrid(modelConfig.steps[0],modelConfig.steps[1]);
+    top.grainPhases = {};
+    top.phase = 0.00;
+    bottom.grainPhases = {};
+    bottom.phase = 1.00;
 
     for (int i = 0; i < modelConfig.steps[0]; i++) {
         for (int j = 0; j < modelConfig.steps[1]; j++) {
@@ -135,6 +168,8 @@ void gridField::addGrain(std::array<int,2> nucleus) {
             grid[i][j].grainPhases.push_back(0);
         }
     }
+    top.grainPhases.push_back(0);
+    bottom.grainPhases.push_back(0);
     grid[nucleus[0]][nucleus[1]].grainPhases[numGrains - 1] = 1.0;
     orientations[numGrains] = {dist(gen),dist(gen),dist(gen)};
 }

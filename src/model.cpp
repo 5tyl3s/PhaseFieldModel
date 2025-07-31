@@ -14,6 +14,7 @@ std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config mod
     for (int i = 0; i < modelConfig.steps[0]-1; i++) {
         for (int j = 0; j < modelConfig.steps[1]-1; j++) {
             pha = field.grid[i][j].phase;
+            std::cout << "\n" << pha << std::endl;
             diffFree[i][j] = modelConfig.phaseCoefficient*(((2*pha-2)*(ifLiq(field.grid[i][j].temp,modelConfig.meltTemp)))+(2*pha*(1-ifLiq(field.grid[i][j].temp,modelConfig.meltTemp)))+(2*pha*(modelConfig.particleSlowingCoefficient*field.grid[i][j].particleComp)))+(field.grid[i][j].neighbors[0]->phase +field.grid[i][j].neighbors[1]->phase +field.grid[i][j].neighbors[2]->phase +field.grid[i][j].neighbors[3]->phase -4)*modelConfig.phaseGradCo;
             
 
@@ -33,7 +34,7 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
         for (int j = 0; j < modelConfig.steps[1]-1; j++) {
             for (int g = 0; g < field.numGrains; g++){
                 gra = field.grid[i][j].grainPhases[g];
-                graEnergy = modelConfig.grainPreCo*((field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]-field.grid[i][j].grainPhases[g])+(2*gra*compOtherGrains(g,field.grid[i][j]))+(2*field.grid[i][j].grainPhases[g]*field.grid[i][j].particleComp*modelConfig.particleSlowingCoefficient))+(modelConfig.grainIntWidth*calcGrainBoundaryEnergy(field.orientations[g],{field.grid[i][j].neighbors[0]->phase+field.grid[i][j].neighbors[1]->phase - 2*field.grid[i][j].phase,field.grid[i][j].neighbors[2]->phase+field.grid[i][j].neighbors[3]->phase - 2*field.grid[i][j].phase}))*(field.grid[i][j].neighbors[0]->grainPhases[g] +field.grid[i][j].neighbors[1]->grainPhases[g] +field.grid[i][j].neighbors[2]->grainPhases[g] +field.grid[i][j].neighbors[3]->grainPhases[g] -4);
+                graEnergy = modelConfig.grainPreCo*((field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]-field.grid[i][j].grainPhases[g])+(2*gra*compOtherGrains(g,field.grid[i][j],field.numGrains))+(2*field.grid[i][j].grainPhases[g]*field.grid[i][j].particleComp*modelConfig.particleSlowingCoefficient))+(modelConfig.grainIntWidth*calcGrainBoundaryEnergy(field.orientations[g],{field.grid[i][j].neighbors[0]->phase+field.grid[i][j].neighbors[1]->phase - 2*field.grid[i][j].phase,field.grid[i][j].neighbors[2]->phase+field.grid[i][j].neighbors[3]->phase - 2*field.grid[i][j].phase}))*(field.grid[i][j].neighbors[0]->grainPhases[g] +field.grid[i][j].neighbors[1]->grainPhases[g] +field.grid[i][j].neighbors[2]->grainPhases[g] +field.grid[i][j].neighbors[3]->grainPhases[g] -4);
 
                 diffFree[i][j][g] = diffFree[i][j][g]+graEnergy;
             }
@@ -43,9 +44,52 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
     return diffFree;
 }
 
-double compOtherGrains(int notIndex,node Node) {
+
+std::vector<std::vector<double>> calcTempDiff(gridField field, config modelConfig) {
+    std::vector<std::vector<double>> tempDiff;
+
+    for (int j = 0; j<modelConfig.steps[0]-1;j++) {
+        tempDiff[0][j] = field.grid[0][j].neighbors[0]->temp + field.grid[0][j].neighbors[1]->temp + field.grid[0][j].neighbors[4]->temp - (3*field.grid[0][j].temp);
+    }
+
+    for (int i = 1; i < modelConfig.steps[0]-2; i++) {
+        for (int j = 0; j < modelConfig.steps[1]-1; j++) {
+            tempDiff[i][j] =1*(field.grid[i][j].neighbors[0]->temp+field.grid[i][j].neighbors[1]->temp+field.grid[i][j].neighbors[2]->temp+field.grid[i][j].neighbors[3]->temp-4*field.grid[i][j].temp);
+        }
+    }
+
+    for (int j = 0; j<modelConfig.steps[0]-1;j++) {
+        tempDiff[modelConfig.steps[1]-1][j] = field.grid[modelConfig.steps[1]-1][j].neighbors[0]->temp + field.grid[modelConfig.steps[1]-1][j].neighbors[1]->temp + field.grid[modelConfig.steps[1]-1][j].neighbors[4]->temp +modelConfig.basePlateTemp - (4*field.grid[0][j].temp);
+    }
+    return tempDiff;
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+double compOtherGrains(int notIndex,node Node, int numGrains) {
     double notThisGrain = 0;
-    for (int gr = 0; gr < size(Node.grainPhases);gr++) {
+    for (int gr = 0; gr < numGrains;gr++) {
         notThisGrain = notThisGrain + Node.grainPhases[gr];
     }
     return notThisGrain-Node.grainPhases[notIndex];
