@@ -11,17 +11,10 @@
 std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config modelConfig) {
     std::vector<std::vector<double>> diffFree(modelConfig.steps[0],std::vector<double>(modelConfig.steps[1]));
     double pha;
-    for (int ii = 0; ii < modelConfig.steps[0]-1; ii++) {
-        for (int jj = 0; jj < modelConfig.steps[1]-1; jj++) {
+    for (int ii = 0; ii < modelConfig.steps[0]; ii++) {
+        for (int jj = 0; jj < modelConfig.steps[1]; jj++) {
             pha = field.grid[ii][jj].phase;
             //std::cout << pha;
-            std::cout << "\ni" << ii << "j" << jj << std::endl;
-            std::cout << ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp) << std::endl;
-            std::cout << field.grid[ii][jj].neighbors[0]->phase << "  ";
-            std::cout << field.grid[ii][jj].neighbors[1]->phase << "  ";
-            std::cout << field.grid[ii][jj].neighbors[2]->phase << "  ";
-            std::cout << field.grid[ii][jj].neighbors[3]->phase << "  " << std::endl;
-            std::cout << field.grid[ii][jj].particleComp;
             diffFree[ii][jj] = modelConfig.phaseCoefficient*(((2*pha-2)*(ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp)))+(2*pha*(1-ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp)))+(2*pha*(modelConfig.particleSlowingCoefficient*field.grid[ii][jj].particleComp)))+(field.grid[ii][jj].neighbors[0]->phase +field.grid[ii][jj].neighbors[1]->phase +field.grid[ii][jj].neighbors[2]->phase +field.grid[ii][jj].neighbors[3]->phase -4)*modelConfig.phaseGradCo;
             
 
@@ -38,9 +31,9 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
     std::vector<std::vector<std::vector<double>>> diffFree(modelConfig.steps[0],std::vector<std::vector<double>>(modelConfig.steps[1],std::vector<double>(field.numGrains)));
     double gra;
     double graEnergy;
-    for (int i = 0; i < modelConfig.steps[0]-1; i++) {
-        for (int j = 0; j < modelConfig.steps[1]-1; j++) {
-            for (int g = 0; g < field.numGrains-1; g++){
+    for (int i = 0; i < modelConfig.steps[0]; i++) {
+        for (int j = 0; j < modelConfig.steps[1]; j++) {
+            for (int g = 0; g < field.numGrains; g++){
                 gra = field.grid[i][j].grainPhases[g];
                 graEnergy = modelConfig.grainPreCo*((field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]-field.grid[i][j].grainPhases[g])+(2*gra*compOtherGrains(g,field.grid[i][j],field.numGrains))+(2*field.grid[i][j].grainPhases[g]*field.grid[i][j].particleComp*modelConfig.particleSlowingCoefficient))+(modelConfig.grainIntWidth*calcGrainBoundaryEnergy(field.orientations[g],{field.grid[i][j].neighbors[0]->phase+field.grid[i][j].neighbors[1]->phase - 2*field.grid[i][j].phase,field.grid[i][j].neighbors[2]->phase+field.grid[i][j].neighbors[3]->phase - 2*field.grid[i][j].phase}))*(field.grid[i][j].neighbors[0]->grainPhases[g] +field.grid[i][j].neighbors[1]->grainPhases[g] +field.grid[i][j].neighbors[2]->grainPhases[g] +field.grid[i][j].neighbors[3]->grainPhases[g] -4);
                 diffFree[i][j][g] = diffFree[i][j][g]+graEnergy;
@@ -53,21 +46,30 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
 
 
 std::vector<std::vector<double>> calcTempDiff(gridField field, config modelConfig) {
-    std::vector<std::vector<double>> tempDiff(modelConfig.steps[0],std::vector<double>(modelConfig.steps[1]));
-
-    for (int j = 0; j<modelConfig.steps[0]-1;j++) {
-        tempDiff[0][j] = field.grid[0][j].neighbors[0]->temp + field.grid[0][j].neighbors[1]->temp + field.grid[0][j].neighbors[4]->temp - (3*field.grid[0][j].temp);
+    std::vector<std::vector<double>> tempDiff(modelConfig.steps[0]-1,std::vector<double>(modelConfig.steps[1]-1));
+    std::cout << "StartingMath\n";
+    for (int j = 0; j<modelConfig.steps[0];j++) {
+        tempDiff[0][j] = field.grid[0][j].neighbors[0]->temp + field.grid[0][j].neighbors[1]->temp + field.grid[0][j].neighbors[3]->temp - (3*field.grid[0][j].temp);
     }
+    std::cout << "notTheTop\n";
 
-    for (int i = 1; i < modelConfig.steps[0]-2; i++) {
+    for (int i = 1; i < modelConfig.steps[0]-1; i++) {
         for (int j = 0; j < modelConfig.steps[1]-1; j++) {
             tempDiff[i][j] =1*(field.grid[i][j].neighbors[0]->temp+field.grid[i][j].neighbors[1]->temp+field.grid[i][j].neighbors[2]->temp+field.grid[i][j].neighbors[3]->temp-4*field.grid[i][j].temp);
         }
     }
+    std::cout << "notTheMiddle\n";
+    int bottomMostStep = modelConfig.steps[0];
 
-    for (int j = 0; j<modelConfig.steps[0]-1;j++) {
-        tempDiff[modelConfig.steps[1]-1][j] = field.grid[modelConfig.steps[1]-1][j].neighbors[0]->temp + field.grid[modelConfig.steps[1]-1][j].neighbors[1]->temp + field.grid[modelConfig.steps[1]-1][j].neighbors[4]->temp +modelConfig.basePlateTemp - (4*field.grid[0][j].temp);
+    for (int jjjj = 0; jjjj<modelConfig.steps[1];jjjj++) {
+        std::cout << field.grid[bottomMostStep][jjjj].temp;
+        std::cout << field.grid[bottomMostStep][jjjj].neighbors[0]->temp << std::endl;
+        std::cout << field.grid[bottomMostStep][jjjj].neighbors[1]->temp << std::endl;
+        std::cout << field.grid[bottomMostStep][jjjj].neighbors[2]->temp << std::endl;
+        std::cout << modelConfig.basePlateTemp << std::endl;
+        tempDiff[bottomMostStep][jjjj] = field.grid[bottomMostStep][jjjj].neighbors[0]->temp + field.grid[bottomMostStep][jjjj].neighbors[1]->temp + field.grid[bottomMostStep][jjjj].neighbors[2]->temp +modelConfig.basePlateTemp - (4*field.grid[0][jjjj].temp);
     }
+    std::cout << "SomethingElse\n";
     return tempDiff;
 
 }

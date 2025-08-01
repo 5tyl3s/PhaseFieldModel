@@ -70,7 +70,7 @@ struct gridField {
     node bottom;
 
 
-    void addGrain(std::vector<int> nucleus);
+    void addGrain(std::vector<int> nucleus, config modelConf);
 
 };
 

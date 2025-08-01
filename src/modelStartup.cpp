@@ -34,7 +34,7 @@ config inputConfig() {
         configOut << "  \"GrainIntEnergyJm2\": 0.3,\n";
         configOut << "  \"GrainIntWidthum\": 0.3,\n";
         configOut << "  \"PhaseBarrierHeightCoefficient\": 0.25,\n";
-        configOut << "  \"BasePlateTempK\": 500,\n";
+        configOut << "  \"BasePlateTempK\": 500.00,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
 
         configOut << "}\n";
@@ -100,7 +100,7 @@ void gridField::buildGrid(int widthSteps, int heightSteps) {
   
     
 
-    for (int j = 0; j< widthSteps-1;j++) {
+    for (int j = 0; j< widthSteps;j++) {
         node& gp = grid[0][j];
         gp.neighbors[0] = (j>0) ? &grid[0][j-1]:&grid[0][widthSteps-1]; //Left
         gp.neighbors[1] = (j<widthSteps-1) ? &grid[0][j+1]:&grid[0][0]; //Right
@@ -109,8 +109,8 @@ void gridField::buildGrid(int widthSteps, int heightSteps) {
         
     }
 
-    for (int i = 1; i< heightSteps-2;i++) {
-        for (int j = 0; j < widthSteps-1;j++) {
+    for (int i = 1; i< heightSteps;i++) {
+        for (int j = 0; j < widthSteps;j++) {
             node& gp = grid[i][j];
             gp.neighbors[0] = (j>0) ? &grid[i][j-1]:&grid[i][widthSteps-1]; //Left
             gp.neighbors[1] = (j<widthSteps-1) ? &grid[i][j+1]:&grid[i][0]; //Right
@@ -119,7 +119,7 @@ void gridField::buildGrid(int widthSteps, int heightSteps) {
         };
     };
 
-    for (int j = 0; j< widthSteps-1;j++) {
+    for (int j = 0; j< widthSteps;j++) {
         node& gp = grid[heightSteps-1][j];
         gp.neighbors[0] = (j>0) ? &grid[heightSteps-1][j-1]:&grid[heightSteps-1][widthSteps-1]; //Left
         gp.neighbors[1] = (j<widthSteps-1) ? &grid[heightSteps-1][j+1]:&grid[heightSteps-1][0]; //Right
@@ -148,35 +148,47 @@ void gridField::init(config modelConfig) {
     bottom.phase = 1.00;
     numGrains = 0;
 
-    for (int i = 0; i < modelConfig.steps[0]; i++) {
-        for (int j = 0; j < modelConfig.steps[1]; j++) {
-            grid[i][j].temp = modelConfig.startTemp +dist(gen);
-            grid[i][j].phase = 0;
-            grid[i][j].particleComp = modelConfig.particleVolFraction; 
+    for (int ik = 0; ik < modelConfig.steps[0]; ik++) {
+        for (int jk = 0; jk < modelConfig.steps[1]; jk++) {
+            grid[ik][jk].temp = modelConfig.startTemp +dist(gen);
+            std::cout << "\nheight:" << ik << "Width" << jk << "Temp: " << grid[ik][jk].temp;
+            grid[ik][jk].phase = 0.0;
+            grid[ik][jk].particleComp = modelConfig.particleVolFraction; 
         };
     }
 }
 
 
-void gridField::addGrain(std::vector<int> nucleus) {
+void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
     numGrains = numGrains + 1;
     std::cout << "\n" << numGrains << "Grains" << std::endl;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::normal_distribution<> dist(45,45);
 
-    for (int i = 1; i < grid.size()-1; i++) {
-        for (int j = 1; j < grid[1].size()-1; j++) {
-            grid[i][j].grainPhases.push_back(0);
+    for (int i = 0; i < modelConf.steps[0]; i++) {
+        for (int j = 0; j < modelConf.steps[1]; j++) {
+            std::cout << i << j;
+            grid[i][j].grainPhases.push_back(0.);
         }
     }
+    std::cout << "\nMe\n";
 
     top.grainPhases.push_back(0.0);
+    std::cout << "\nMe\n";
     bottom.grainPhases.push_back(0.0);
+    std::cout << "\nMe\n";
+    std::cout << nucleus[0] << nucleus[1];
+    std::cout << "\n" << numGrains << std::endl;
+    
+    double one = 1.000;
+    std::cout << grid[nucleus[0]][nucleus[1]].grainPhases[0];
 
-    grid[nucleus[0]][nucleus[1]].grainPhases[numGrains - 1] = 1.0;
+    grid[nucleus[0]][nucleus[1]].grainPhases[numGrains-1] = one;
+    std::cout << "\nMe\n";
 
     eulerAngles tempRots = {dist(gen),dist(gen),dist(gen)};
+    std::cout << "\nMe\n";
     orientations.push_back(tempRots);
 
 }

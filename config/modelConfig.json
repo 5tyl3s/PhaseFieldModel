@@ -1,5 +1,5 @@
 {
-  "dx_um": 0.5,
+  "dx_um": 20,
   "meltTemp": 2896,
   "dt_s": 0.001,
   "startTempK": 3000,
@@ -12,6 +12,6 @@
   "GrainIntEnergyJm2": 0.3,
   "GrainIntWidthum": 0.3,
   "PhaseBarrierHeightCoefficient": 0.25,
-  "BasePlateTempK": 500,
+  "BasePlateTempK": 500.00,
   "GrainBarrierHeightCoefficient": 0.125
 }

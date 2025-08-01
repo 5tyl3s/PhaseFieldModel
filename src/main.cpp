@@ -20,10 +20,10 @@ int main() {
     std::vector<std::vector<std::vector<double>>> grainDiffEn(configData.steps[0],std::vector<std::vector<double>>(configData.steps[1],std::vector<double>(model.numGrains)));
     std::vector<std::vector<double>> phaseDiffEn(configData.steps[0],std::vector<double>(configData.steps[1]));
     std::vector<std::vector<double>> tempGrad;
-    std::vector<int> nucLoc = {20,20};
+    std::vector<int> nucLoc = {2,2};
 
     std::cout << nucLoc[0];
-    model.addGrain(nucLoc);
+    model.addGrain(nucLoc,configData);
     std::cout << "GrainAdded";
 
 
