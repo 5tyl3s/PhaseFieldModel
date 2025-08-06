@@ -9,4 +9,4 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
 std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config modelConfig);
 std::vector<double> eulerRotate(eulerAngles orient, std::vector<double> rotatedVector);
 double dotAngle(std::vector<double> vec1, std::vector<double> vec2);
-std::vector<std::vector<double>> calcTempDiff(gridField field, config modelConfig);
+std::vector<std::vector<double>> calcTempDiff(gridField& field, const config& modelConfig);

@@ -33,6 +33,8 @@ struct config {
     double particleSlowingCoefficient = 0;
     double phaseGradCo = 0.75*liqSolIntE*liqSolIntWidth;
     double basePlateTemp;
+    double heatCapacity;
+    double density;
 
 };
 
@@ -71,6 +73,7 @@ struct gridField {
 
 
     void addGrain(std::vector<int> nucleus, config modelConf);
+    void update(std::vector<std::vector<double>> phaseDiffEn, std::vector<std::vector<double>> tempGrad, std::vector<std::vector<std::vector<double>>> grainDiffEn, config modelConf);
 
 };
 

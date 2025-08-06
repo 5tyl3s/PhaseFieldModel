@@ -22,22 +22,16 @@ int main() {
     std::vector<std::vector<double>> tempGrad;
     std::vector<int> nucLoc = {2,2};
 
-    std::cout << nucLoc[0];
     model.addGrain(nucLoc,configData);
-    std::cout << "GrainAdded";
 
 
 
-    for (int t = 0; t < 5; t++) {
-        std::cout << "\n"<<t<< "\n";
+    for (int t = 0; t < 200; t++) {
         grainDiffEn = calcGrainDiffEnergy(model,configData);
-        std::cout << "GrainEnDone\n";
-
         phaseDiffEn = calcPhaseDiffEnergy(model,configData);
-        std::cout << "PhaseEnDone\n";
         tempGrad = calcTempDiff(model,configData);
-        std::cout << "TempDone\n";
-    
+
+        model.update(phaseDiffEn,tempGrad,grainDiffEn,configData); 
     }
     std::string fileName = "TempGrid";
     std::ofstream output_file(fileName);

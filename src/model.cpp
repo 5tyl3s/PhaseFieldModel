@@ -20,7 +20,6 @@ std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config mod
 
         }
     }
-    std::cout << "calcDiffFree";
     return diffFree; 
 
 
@@ -45,31 +44,23 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
 }
 
 
-std::vector<std::vector<double>> calcTempDiff(gridField field, config modelConfig) {
-    std::vector<std::vector<double>> tempDiff(modelConfig.steps[0]-1,std::vector<double>(modelConfig.steps[1]-1));
-    std::cout << "StartingMath\n";
-    for (int j = 0; j<modelConfig.steps[0];j++) {
-        tempDiff[0][j] = field.grid[0][j].neighbors[0]->temp + field.grid[0][j].neighbors[1]->temp + field.grid[0][j].neighbors[3]->temp - (3*field.grid[0][j].temp);
+std::vector<std::vector<double>> calcTempDiff(gridField& field, const config& modelConfig) {
+    std::vector<std::vector<double>> tempDiff(modelConfig.steps[0],std::vector<double>(modelConfig.steps[1]));
+    for (int j = 0; j<modelConfig.steps[1];j++) {
+        tempDiff[0][j] = 1/(modelConfig.dx*modelConfig.dx)*(field.grid[0][j].neighbors[0]->temp + field.grid[0][j].neighbors[1]->temp + field.grid[0][j].neighbors[3]->temp - (3*field.grid[0][j].temp));
     }
-    std::cout << "notTheTop\n";
+
 
     for (int i = 1; i < modelConfig.steps[0]-1; i++) {
         for (int j = 0; j < modelConfig.steps[1]-1; j++) {
-            tempDiff[i][j] =1*(field.grid[i][j].neighbors[0]->temp+field.grid[i][j].neighbors[1]->temp+field.grid[i][j].neighbors[2]->temp+field.grid[i][j].neighbors[3]->temp-4*field.grid[i][j].temp);
+            tempDiff[i][j] =1/(modelConfig.dx*modelConfig.dx)*(field.grid[i][j].neighbors[0]->temp+field.grid[i][j].neighbors[1]->temp+field.grid[i][j].neighbors[2]->temp+field.grid[i][j].neighbors[3]->temp-4*field.grid[i][j].temp);
         }
     }
-    std::cout << "notTheMiddle\n";
-    int bottomMostStep = modelConfig.steps[0];
+    int bottomMostStep = modelConfig.steps[0]-1;
 
     for (int jjjj = 0; jjjj<modelConfig.steps[1];jjjj++) {
-        std::cout << field.grid[bottomMostStep][jjjj].temp;
-        std::cout << field.grid[bottomMostStep][jjjj].neighbors[0]->temp << std::endl;
-        std::cout << field.grid[bottomMostStep][jjjj].neighbors[1]->temp << std::endl;
-        std::cout << field.grid[bottomMostStep][jjjj].neighbors[2]->temp << std::endl;
-        std::cout << modelConfig.basePlateTemp << std::endl;
-        tempDiff[bottomMostStep][jjjj] = field.grid[bottomMostStep][jjjj].neighbors[0]->temp + field.grid[bottomMostStep][jjjj].neighbors[1]->temp + field.grid[bottomMostStep][jjjj].neighbors[2]->temp +modelConfig.basePlateTemp - (4*field.grid[0][jjjj].temp);
+        tempDiff[bottomMostStep][jjjj] = 1/(modelConfig.dx*modelConfig.dx)*(field.grid[bottomMostStep][jjjj].neighbors[0]->temp + field.grid[bottomMostStep][jjjj].neighbors[1]->temp + field.grid[bottomMostStep][jjjj].neighbors[2]->temp +modelConfig.basePlateTemp - (4*field.grid[bottomMostStep][jjjj].temp));
     }
-    std::cout << "SomethingElse\n";
     return tempDiff;
 
 }
@@ -148,7 +139,6 @@ double ifLiq(double temp, double meltTemp) {
 double calcGrainBoundaryEnergy(eulerAngles orient, std::vector<double> gradient) {
     std::vector<double> gradNormal = {-1*gradient[1],1*gradient[0],0};
     std::vector<double> surfPlaneVec =eulerRotate(orient,gradNormal);
-    std::cout << surfPlaneVec[0] << ' ' << surfPlaneVec[1] << ' ' << surfPlaneVec[2] << std::endl;
 
     double angle110 = dotAngle(surfPlaneVec,std::vector<double> {1,1,0});
     double angle111 = dotAngle(surfPlaneVec,std::vector<double> {1,1,1});
@@ -230,3 +220,5 @@ double dotAngle(std::vector<double> vec1, std::vector<double> vec2) {
     return angle;
 
 }
+
+
