@@ -33,9 +33,12 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
     for (int i = 0; i < modelConfig.steps[0]; i++) {
         for (int j = 0; j < modelConfig.steps[1]; j++) {
             for (int g = 0; g < field.numGrains; g++){
+                //std::cout << "Calculating Grain Energy for Grain: " << g << " At Location: " << i << "," << j << std::endl;
                 gra = field.grid[i][j].grainPhases[g];
+                //std::cout << gra << std::endl;
                 graEnergy = modelConfig.grainPreCo*((field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]-field.grid[i][j].grainPhases[g])+(2*gra*compOtherGrains(g,field.grid[i][j],field.numGrains))+(2*field.grid[i][j].grainPhases[g]*field.grid[i][j].particleComp*modelConfig.particleSlowingCoefficient))+(modelConfig.grainIntWidth*calcGrainBoundaryEnergy(field.orientations[g],{field.grid[i][j].neighbors[0]->phase+field.grid[i][j].neighbors[1]->phase - 2*field.grid[i][j].phase,field.grid[i][j].neighbors[2]->phase+field.grid[i][j].neighbors[3]->phase - 2*field.grid[i][j].phase}))*(field.grid[i][j].neighbors[0]->grainPhases[g] +field.grid[i][j].neighbors[1]->grainPhases[g] +field.grid[i][j].neighbors[2]->grainPhases[g] +field.grid[i][j].neighbors[3]->grainPhases[g] -4);
                 diffFree[i][j][g] = diffFree[i][j][g]+graEnergy;
+                //std::cout << diffFree[i][j][g] << std::endl;
             }
 
         }

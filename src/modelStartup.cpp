@@ -190,14 +190,14 @@ void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
     bottom.grainPhases.push_back(0.0);
     
     double one = 1.000;
-    std::cout << "hi";
+    //std::cout << "hi";
 
     grid[nucleus[0]][nucleus[1]].grainPhases[numGrains-1] = one;
-    std::cout << "hi";
+    //std::cout << "hi";
     eulerAngles tempRots = {dist(gen),dist(gen),dist(gen)};
-    std::cout << tempRots.theta1;
+    ////std::cout << tempRots.theta1;
     orientations.push_back(tempRots);
-    std::cout << "Hi";
+    //std::cout << "Hi";
 
 }
 void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector<std::vector<double>> tempGrad, std::vector<std::vector<std::vector<double>>> grainDiffEn, config modelConf) {
@@ -214,28 +214,47 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
             //std::cout << "GradT: " << tempGrad[i][j] << std::endl;
             //std::cout <<" OldTemp: " << grid[i][j].temp << std::endl;
             //std::cout <<  "DT: " << (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j]) << std::endl;
+            //std::cout << "1";
             grid[i][j].temp = grid[i][j].temp + (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j]);
-            if (grid[i][j].temp <= modelConf.meltTemp*0.9) {
-                std::cout << "addingGrain\n";
-                grainLocTemporary = {i,j};
-                std::cout << "Grain Location: " << grainLocTemporary[0] << " " << grainLocTemporary[1] << std::endl;
-                addGrain(grainLocTemporary,modelConf);
-                std::cout<< "\nUpdated\n";
-            }
+            // std::cout << "2";
 
             //std::cout <<" NewTemp: " << grid[i][j].temp << std::endl;
             //std::cout << "Old Phase: " <<grid[i][j].phase;
             grid[i][j].phase = grid[i][j].phase + modelConf.dt*phaseDiffEn[i][j];
+            //std::cout << "3";
             //std::cout << "Help";
             //std::cout << " New Phase: " <<grid[i][j].phase << std::endl;
             for (int g = 0; g < numGrains;g++) {
-                std::cout << "What";
-                std::cout << numGrains << "Nums";
+                //std::cout << "What";
+                //std::cout << numGrains << "Nums" << std::endl;
+                //std::cout << grainDiffEn[i][j][g] << std::endl;
                 grid[i][j].grainPhases[g] = grid[i][j].grainPhases[g] + grainDiffEn[i][j][g];
+            }
+
+            //std::cout << "Final Phase: " << grid[i][j].phase << std::endl;
+        }
+    }
+
+    for (int i = 0; i < modelConf.steps[0]; i++) {
+        for (int j = 0; j < modelConf.steps[1]; j++) {
+            if (grid[i][j].phase > 1) {
+                grid[i][j].phase = 1;
+            }
+            if (grid[i][j].phase < 0) {
+                grid[i][j].phase = 0;
+            }
+            if (grid[i][j].temp < modelConf.meltTemp*0.75) {
+
+                if (grid[i][j].phase == 0) {
+                    grid[i][j].phase = 1;
+                    addGrain({i,j},modelConf);
+                }
             }
         }
     }
+
 }
+
 
        
       
