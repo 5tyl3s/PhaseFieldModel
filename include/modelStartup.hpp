@@ -11,12 +11,12 @@ struct config {
     double dx; //um
     double dt; //s
     double kSolid; //W/m*k
-    double kLiquid = kSolid * 0.45; //W/m*k
+    double kLiquid; //W/m*k
     int success;
     double startTemp; //K
     double cellWidth;//um
     double cellHeight;//um
-    double cellArea = cellHeight * cellWidth;
+    double cellArea;
     double particleVolFraction;
     double liqSolIntWidth; //um
     double grainIntWidth; //um
@@ -28,10 +28,10 @@ struct config {
     double phaseCoefficient;
     double barrierHeightPhase;
     double barrierHeightGrain;
-    double phasePreCo = 0.75*liqSolIntE/(barrierHeightPhase*liqSolIntWidth);
-    double grainPreCo = 0.75*grainIntE/(barrierHeightGrain*grainIntWidth);
-    double particleSlowingCoefficient = 0;
-    double phaseGradCo = 0.75*liqSolIntE*liqSolIntWidth;
+    double phasePreCo;
+    double grainPreCo;
+    double particleSlowingCoefficient;
+    double phaseGradCo;
     double basePlateTemp;
     double heatCapacity;
     double density;
@@ -70,6 +70,7 @@ struct gridField {
     node top;
 
     node bottom;
+    std::vector<int> grainLocTemporary;
 
 
     void addGrain(std::vector<int> nucleus, config modelConf);

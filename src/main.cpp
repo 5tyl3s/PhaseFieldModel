@@ -26,25 +26,38 @@ int main() {
 
 
 
-    for (int t = 0; t < 200; t++) {
+    for (int t = 0; t < 10000; t++) {
         grainDiffEn = calcGrainDiffEnergy(model,configData);
         phaseDiffEn = calcPhaseDiffEnergy(model,configData);
         tempGrad = calcTempDiff(model,configData);
 
         model.update(phaseDiffEn,tempGrad,grainDiffEn,configData); 
     }
-    std::string fileName = "TempGrid";
-    std::ofstream output_file(fileName);
-    if (!output_file.is_open()) {
-        std::cerr << "Error: Could not open file " << fileName << std::endl;
+    std::string fileNameTemp = "TempGrid";
+    std::ofstream output_file1(fileNameTemp);
+    if (!output_file1.is_open()) {
+        std::cerr << "Error: Could not open file " << fileNameTemp << std::endl;
     }
     for (int i=0;i < configData.steps[0]-1;i++) {
         for (int j=0;j < configData.steps[1]-2;j++) {
-            output_file << model.grid[i][j].temp << ',';
+            output_file1 << model.grid[i][j].temp << ',';
         }
-        output_file << model.grid[i][configData.steps[1]-1].temp << std::endl;
+        output_file1 << model.grid[i][configData.steps[1]-1].temp << std::endl;
+    }
+    output_file1.close();
+    std::string fileNamePhase = "PhaseGrid";
+    std::ofstream output_file2(fileNamePhase);
+    if (!output_file2.is_open()) {
+        std::cerr << "Error: Could not open file " << fileNamePhase << std::endl;
+    }
+    for (int i=0;i < configData.steps[0]-1;i++) {
+        for (int j=0;j < configData.steps[1]-2;j++) {
+            output_file2 << model.grid[i][j].phase << ',';
+        }
+        output_file2 << model.grid[i][configData.steps[1]-1].phase << std::endl;
     }
     std::cout << "Calc Completed, Saved Data";
+    output_file2.close();
  
  
 

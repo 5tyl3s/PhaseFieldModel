@@ -47,20 +47,24 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
 std::vector<std::vector<double>> calcTempDiff(gridField& field, const config& modelConfig) {
     std::vector<std::vector<double>> tempDiff(modelConfig.steps[0],std::vector<double>(modelConfig.steps[1]));
     for (int j = 0; j<modelConfig.steps[1];j++) {
-        tempDiff[0][j] = 1/(modelConfig.dx*modelConfig.dx)*(field.grid[0][j].neighbors[0]->temp + field.grid[0][j].neighbors[1]->temp + field.grid[0][j].neighbors[3]->temp - (3*field.grid[0][j].temp));
+        tempDiff[0][j] = (1/(modelConfig.dx*modelConfig.dx))*(field.grid[0][j].neighbors[0]->temp + field.grid[0][j].neighbors[1]->temp + field.grid[0][j].neighbors[3]->temp - (3*field.grid[0][j].temp));
     }
 
 
     for (int i = 1; i < modelConfig.steps[0]-1; i++) {
-        for (int j = 0; j < modelConfig.steps[1]-1; j++) {
-            tempDiff[i][j] =1/(modelConfig.dx*modelConfig.dx)*(field.grid[i][j].neighbors[0]->temp+field.grid[i][j].neighbors[1]->temp+field.grid[i][j].neighbors[2]->temp+field.grid[i][j].neighbors[3]->temp-4*field.grid[i][j].temp);
+        for (int j = 0; j < modelConfig.steps[1]; j++) {
+            tempDiff[i][j] =(1/(modelConfig.dx*modelConfig.dx))*(field.grid[i][j].neighbors[0]->temp+field.grid[i][j].neighbors[1]->temp+field.grid[i][j].neighbors[2]->temp+field.grid[i][j].neighbors[3]->temp-4*field.grid[i][j].temp);
         }
     }
     int bottomMostStep = modelConfig.steps[0]-1;
 
     for (int jjjj = 0; jjjj<modelConfig.steps[1];jjjj++) {
-        tempDiff[bottomMostStep][jjjj] = 1/(modelConfig.dx*modelConfig.dx)*(field.grid[bottomMostStep][jjjj].neighbors[0]->temp + field.grid[bottomMostStep][jjjj].neighbors[1]->temp + field.grid[bottomMostStep][jjjj].neighbors[2]->temp +modelConfig.basePlateTemp - (4*field.grid[bottomMostStep][jjjj].temp));
+        //std::cout << "Plus: " << field.grid[bottomMostStep][jjjj].neighbors[0]->temp + field.grid[bottomMostStep][jjjj].neighbors[1]->temp + field.grid[bottomMostStep][jjjj].neighbors[2]->temp + modelConfig.basePlateTemp << " Minus: " << 4*field.grid[bottomMostStep][jjjj].temp << std::endl;
+        
+        tempDiff[bottomMostStep][jjjj] = (1/(modelConfig.dx*modelConfig.dx))*(field.grid[bottomMostStep][jjjj].neighbors[0]->temp + field.grid[bottomMostStep][jjjj].neighbors[1]->temp + field.grid[bottomMostStep][jjjj].neighbors[2]->temp + modelConfig.basePlateTemp - (4*field.grid[bottomMostStep][jjjj].temp));
+        
     }
+    //std::cout << tempDiff[bottomMostStep][2] << std::endl;
     return tempDiff;
 
 }
