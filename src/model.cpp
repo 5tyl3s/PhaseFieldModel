@@ -11,14 +11,25 @@
 std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config modelConfig) {
     std::vector<std::vector<double>> diffFree(modelConfig.steps[0],std::vector<double>(modelConfig.steps[1]));
     double pha;
+    double eLoc;
+    double eGrad;
     for (int ii = 0; ii < modelConfig.steps[0]; ii++) {
         for (int jj = 0; jj < modelConfig.steps[1]; jj++) {
-            pha = field.grid[ii][jj].phase;
-            //std::cout << pha;
-            diffFree[ii][jj] = modelConfig.phaseCoefficient*(((2*pha-2)*(ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp)))+(2*pha*(1-ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp)))+(2*pha*(modelConfig.particleSlowingCoefficient*field.grid[ii][jj].particleComp)))+(field.grid[ii][jj].neighbors[0]->phase +field.grid[ii][jj].neighbors[1]->phase +field.grid[ii][jj].neighbors[2]->phase +field.grid[ii][jj].neighbors[3]->phase -4)*modelConfig.phaseGradCo;
+            eLoc = 0.01*modelConfig.phaseCoefficient*((-1*(pha-2)*(ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp))));
+            eGrad = 0.005*((pha*(1-ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp)))+(2*pha*(modelConfig.particleSlowingCoefficient*field.grid[ii][jj].particleComp))+(field.grid[ii][jj].neighbors[0]->phase +field.grid[ii][jj].neighbors[1]->phase +field.grid[ii][jj].neighbors[2]->phase +field.grid[ii][jj].neighbors[3]->phase -4))*modelConfig.phaseGradCo;
+            //pha = field.grid[ii][jj].phase;
+            //std::cout << pha << "   ";
+
+            
+            diffFree[ii][jj] =eLoc + eGrad;
+            //std::cout << "Gradient Energy: " << eGrad << " Local Energy: " << eLoc << " Total Energy: " << diffFree[ii][jj] << std::endl;
+            if (diffFree[ii][jj] < 0) {
+                diffFree[ii][jj] = 0;
+            }
             
 
         }
+ 
     }
     return diffFree; 
 
@@ -138,7 +149,7 @@ double calcLocalFree(node nodeLoc, config mConfig) {
 }
 double ifLiq(double temp, double meltTemp) {
     //0 Above melt, 1 below
-    return 0.5*(1-(tanh((temp/meltTemp)-1)));
+    return 0.5*(1-(tanh(1000000*((temp/meltTemp)-1))));
 
 
 }

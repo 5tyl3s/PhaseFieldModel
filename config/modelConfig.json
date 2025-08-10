@@ -14,6 +14,6 @@
   "GrainIntEnergyJm2": 3,
   "GrainIntWidthum": 0.3,
   "PhaseBarrierHeightCoefficient": 0.25,
-  "BasePlateTempK": 500.00,
+  "BasePlateTempK": 300.00,
   "GrainBarrierHeightCoefficient": 0.125
 }

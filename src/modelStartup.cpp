@@ -174,6 +174,7 @@ void gridField::init(config modelConfig) {
 void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
     
     numGrains = numGrains + 1;
+    std::cout << "There are now "<<numGrains << "Grains\n";
     std::random_device rd;
     std::mt19937 gen(rd());
     std::normal_distribution<> dist(45,45);
@@ -220,7 +221,7 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
 
             //std::cout <<" NewTemp: " << grid[i][j].temp << std::endl;
             //std::cout << "Old Phase: " <<grid[i][j].phase;
-            grid[i][j].phase = grid[i][j].phase + modelConf.dt*phaseDiffEn[i][j];
+            grid[i][j].phase = grid[i][j].phase + phaseDiffEn[i][j];
             //std::cout << "3";
             //std::cout << "Help";
             //std::cout << " New Phase: " <<grid[i][j].phase << std::endl;
@@ -243,9 +244,9 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
             if (grid[i][j].phase < 0) {
                 grid[i][j].phase = 0;
             }
-            if (grid[i][j].temp < modelConf.meltTemp*0.75) {
+            if (grid[i][j].temp < modelConf.meltTemp*0.9) {
 
-                if (grid[i][j].phase == 0) {
+                if (grid[i][j].phase < 0.1) {
                     grid[i][j].phase = 1;
                     addGrain({i,j},modelConf);
                 }
