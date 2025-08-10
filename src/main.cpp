@@ -26,7 +26,7 @@ int main() {
 
 
     model.addGrain(nucLoc,configData);
-    for (int t = 0; t < 2000; t++) {
+    for (int t = 0; t < 500; t++) {
         std::cout << t << std::endl;
         grainDiffEn = calcGrainDiffEnergy(model,configData);
         phaseDiffEn = calcPhaseDiffEnergy(model,configData);

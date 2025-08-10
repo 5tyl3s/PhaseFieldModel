@@ -244,7 +244,7 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
             if (grid[i][j].phase < 0) {
                 grid[i][j].phase = 0;
             }
-            if (grid[i][j].temp < modelConf.meltTemp*0.9) {
+            if (grid[i][j].temp < modelConf.meltTemp*0.7) {
 
                 if (grid[i][j].phase < 0.1) {
                     grid[i][j].phase = 1;
