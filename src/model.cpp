@@ -15,8 +15,15 @@ std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config mod
     double eGrad;
     for (int ii = 0; ii < modelConfig.steps[0]; ii++) {
         for (int jj = 0; jj < modelConfig.steps[1]; jj++) {
-            eLoc = 0.01*modelConfig.phaseCoefficient*((-1*(pha-2)*(ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp))));
-            eGrad = 0.005*((pha*(1-ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp)))+(2*pha*(modelConfig.particleSlowingCoefficient*field.grid[ii][jj].particleComp))+(field.grid[ii][jj].neighbors[0]->phase +field.grid[ii][jj].neighbors[1]->phase +field.grid[ii][jj].neighbors[2]->phase +field.grid[ii][jj].neighbors[3]->phase -4))*modelConfig.phaseGradCo;
+            eLoc = modelConfig.phaseCoefficient*((-2*(1-field.grid[ii][jj].phase)*(ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp)))+(2*pha*(1-ifLiq(field.grid[ii][jj].temp,modelConfig.meltTemp))));
+            for (int g = 0; g < field.numGrains; g++) {
+                eLoc = eLoc + modelConfig.grainPreCo*(-2*(1-field.grid[ii][jj].phase)*field.grid[ii][jj].grainPhases[g]*field.grid[ii][jj].grainPhases[g]);
+            }
+            eLoc = eLoc + ((2*field.grid[ii][jj].phase*(modelConfig.particleSlowingCoefficient*field.grid[ii][jj].particleComp)));
+            
+            
+            eGrad = (field.grid[ii][jj].neighbors[0]->phase +field.grid[ii][jj].neighbors[1]->phase +field.grid[ii][jj].neighbors[2]->phase +field.grid[ii][jj].neighbors[3]->phase -4*field.grid[ii][jj].phase)*modelConfig.phaseGradCo;
+            
             //pha = field.grid[ii][jj].phase;
             //std::cout << pha << "   ";
 
@@ -25,7 +32,7 @@ std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config mod
             //std::cout << "Gradient Energy: " << eGrad << " Local Energy: " << eLoc << " Total Energy: " << diffFree[ii][jj] << std::endl;
             if (diffFree[ii][jj] < 0) {
                 diffFree[ii][jj] = 0;
-            }
+            //}
             
 
         }
@@ -47,7 +54,11 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
                 //std::cout << "Calculating Grain Energy for Grain: " << g << " At Location: " << i << "," << j << std::endl;
                 gra = field.grid[i][j].grainPhases[g];
                 //std::cout << gra << std::endl;
-                graEnergy = modelConfig.grainPreCo*((field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]-field.grid[i][j].grainPhases[g])+(2*gra*compOtherGrains(g,field.grid[i][j],field.numGrains))+(2*field.grid[i][j].grainPhases[g]*field.grid[i][j].particleComp*modelConfig.particleSlowingCoefficient))+(modelConfig.grainIntWidth*calcGrainBoundaryEnergy(field.orientations[g],{field.grid[i][j].neighbors[0]->phase+field.grid[i][j].neighbors[1]->phase - 2*field.grid[i][j].phase,field.grid[i][j].neighbors[2]->phase+field.grid[i][j].neighbors[3]->phase - 2*field.grid[i][j].phase}))*(field.grid[i][j].neighbors[0]->grainPhases[g] +field.grid[i][j].neighbors[1]->grainPhases[g] +field.grid[i][j].neighbors[2]->grainPhases[g] +field.grid[i][j].neighbors[3]->grainPhases[g] -4);
+                graEnergy = modelConfig.grainPreCo*((field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]*field.grid[i][j].grainPhases[g]-field.grid[i][j].grainPhases[g])+(2*gra*compOtherGrains(g,field.grid[i][j],field.numGrains))+(2*field.grid[i][j].grainPhases[g]*field.grid[i][j].particleComp*modelConfig.particleSlowingCoefficient))+(modelConfig.grainIntWidth*calcGrainBoundaryEnergy(field.orientations[g],{field.grid[i][j].neighbors[0]->phase+field.grid[i][j].neighbors[1]->phase - 2*field.grid[i][j].phase,field.grid[i][j].neighbors[2]->phase+field.grid[i][j].neighbors[3]->phase - 2*field.grid[i][j].phase}))*(field.grid[i][j].neighbors[0]->grainPhases[g] +field.grid[i][j].neighbors[1]->grainPhases[g] +field.grid[i][j].neighbors[2]->grainPhases[g] +field.grid[i][j].neighbors[3]->grainPhases[g] -4*field.grid[i][j].grainPhases[g]);
+                
+                
+                
+                
                 diffFree[i][j][g] = diffFree[i][j][g]+graEnergy;
                 //std::cout << diffFree[i][j][g] << std::endl;
             }
@@ -84,27 +95,6 @@ std::vector<std::vector<double>> calcTempDiff(gridField& field, const config& mo
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 double compOtherGrains(int notIndex,node Node, int numGrains) {
     double notThisGrain = 0;
     for (int gr = 0; gr < numGrains;gr++) {
@@ -117,36 +107,6 @@ double compOtherGrains(int notIndex,node Node, int numGrains) {
 
 
 
-
-//Free Energy Calcs, used for validating energy decrease??
-std::vector<std::vector<double>> calcFreeEnergy(gridField field,config modelConfig) {
-    std::vector<std::vector<double>> freeEnVec;
-
-    for (int i = 0; i < modelConfig.steps[0]-1; i++) {
-        for (int j = 0; j < modelConfig.steps[1]-1; j++) {
-            double fLocal = calcLocalFree(field.grid[i][j],modelConfig);
-            double fPhaseGrad = 0.5*modelConfig.phaseCoefficient*(field.grid[i][j].neighbors[0]->phase +field.grid[i][j].neighbors[1]->phase +field.grid[i][j].neighbors[2]->phase +field.grid[i][j].neighbors[3]->phase -4);//Von Nueman laplacian
-            double gbEn = 0;
-            for (int gr = 0; gr < field.numGrains; gr++)
-                if (field.grid[i][j].grainPhases[gr] !=0) {
-                    gbEn = gbEn + calcLocalFree(field.grid[i][j], modelConfig);
-                };
-
-            double fGrainGrad = gbEn*modelConfig.grainIntWidth;
-
-            freeEnVec[i][j] = fLocal+fPhaseGrad+fGrainGrad;
-
-
-        }
-    }
-    return freeEnVec;
-
-
-}
-
-double calcLocalFree(node nodeLoc, config mConfig) {
-    return mConfig.phasePreCo*(((1-nodeLoc.phase)*(1-nodeLoc.phase)*(ifLiq(nodeLoc.temp,mConfig.meltTemp)))+(nodeLoc.phase*nodeLoc.phase*(1-ifLiq(nodeLoc.temp,mConfig.meltTemp))));
-}
 double ifLiq(double temp, double meltTemp) {
     //0 Above melt, 1 below
     return 0.5*(1-(tanh(1000000*((temp/meltTemp)-1))));

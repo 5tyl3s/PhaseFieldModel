@@ -221,7 +221,7 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
 
             //std::cout <<" NewTemp: " << grid[i][j].temp << std::endl;
             //std::cout << "Old Phase: " <<grid[i][j].phase;
-            grid[i][j].phase = grid[i][j].phase + phaseDiffEn[i][j];
+            grid[i][j].phase = grid[i][j].phase - modelConf.dt*0.0001*(1/(modelConf.dx*modelConf.dx))*phaseDiffEn[i][j];
             //std::cout << "3";
             //std::cout << "Help";
             //std::cout << " New Phase: " <<grid[i][j].phase << std::endl;
@@ -229,7 +229,7 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
                 //std::cout << "What";
                 //std::cout << numGrains << "Nums" << std::endl;
                 //std::cout << grainDiffEn[i][j][g] << std::endl;
-                grid[i][j].grainPhases[g] = grid[i][j].grainPhases[g] + grainDiffEn[i][j][g];
+                grid[i][j].grainPhases[g] = grid[i][j].grainPhases[g] - modelConf.dt*(1/(modelConf.dx*modelConf.dx))*grainDiffEn[i][j][g];
             }
 
             //std::cout << "Final Phase: " << grid[i][j].phase << std::endl;
@@ -244,13 +244,21 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
             if (grid[i][j].phase < 0) {
                 grid[i][j].phase = 0;
             }
-            if (grid[i][j].temp < modelConf.meltTemp*0.7) {
-
-                if (grid[i][j].phase < 0.1) {
-                    grid[i][j].phase = 1;
-                    addGrain({i,j},modelConf);
+            for (int g = 0; g < numGrains; g++) {
+                if (grid[i][j].grainPhases[g] > 1) {
+                    grid[i][j].grainPhases[g] = 1;
+                }
+                if (grid[i][j].grainPhases[g] < 0) {
+                    grid[i][j].grainPhases[g] = 0;
                 }
             }
+            //if (grid[i][j].temp < modelConf.meltTemp*0.5) {
+
+                //if (grid[i][j].phase < 0.1) {
+                  //  grid[i][j].phase = 1;
+                    //addGrain({i,j},modelConf);
+                //}
+           // }
         }
     }
 
