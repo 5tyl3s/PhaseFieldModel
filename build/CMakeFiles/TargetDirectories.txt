@@ -1,3 +1,0 @@
-C:/Users/Gorin/Onedrive/Desktop/research/InoculationPhaseFieldModeling/PhaseFieldModel/build/CMakeFiles/PhaseFieldModel.dir
-C:/Users/Gorin/Onedrive/Desktop/research/InoculationPhaseFieldModeling/PhaseFieldModel/build/CMakeFiles/edit_cache.dir
-C:/Users/Gorin/Onedrive/Desktop/research/InoculationPhaseFieldModeling/PhaseFieldModel/build/CMakeFiles/rebuild_cache.dir
