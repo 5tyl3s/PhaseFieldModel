@@ -35,6 +35,7 @@ struct config {
     double basePlateTemp;
     double heatCapacity;
     double density;
+    double grainGradCo;
 
 };
 

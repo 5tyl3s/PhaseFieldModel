@@ -1,19 +1,19 @@
 {
   "dx_um": 5,
   "meltTemp": 2896,
-  "HeatCapacityJKgK": 421,
-  "Densitykgm3": 1028,
+  "HeatCapacityJKgK": 251,
+  "Densitykgm3": 10280,
   "dt_s": 0.000000005,
   "startTempK": 3000,
   "solidConductivityWMK": 138,
   "cellHeightum": 200,
   "cellWidthum": 200,
   "particleVolumeFraction": 0.01,
-  "LiqSolIntEnergyJm2": 3,
-  "LiqSolIntWidthum": 0.3,
-  "GrainIntEnergyJm2": 3,
-  "GrainIntWidthum": 0.3,
-  "PhaseBarrierHeightCoefficient": 0.25,
+  "LiqSolIntEnergyJm2": 4,
+  "LiqSolIntWidthum": 0.1,
+  "GrainIntEnergyJm2": 4,
+  "GrainIntWidthum": 10,
+  "PhaseBarrierHeightCoefficient": 0.1,
   "BasePlateTempK": 300.00,
-  "GrainBarrierHeightCoefficient": 0.125
+  "GrainBarrierHeightCoefficient": 0.1
 }

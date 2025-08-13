@@ -23,11 +23,11 @@ config inputConfig() {
         configOut << "{\n";
         configOut << "  \"dx_um\": 0.5,\n";
         configOut << "  \"meltTemp\": 2896,\n";
-        configOut << "  \"HeatCapacityJKgK\": 421,\n";
-        configOut << "  \"Densitykgm3\": 10280,\n";
+        configOut << "  \"HeatCapacityJKgK\": 251,\n"; // Mo
+        configOut << "  \"Densitykgm3\": 10280,\n";    // Mo
         configOut << "  \"dt_s\": 0.001,\n";
         configOut << "  \"startTempK\": 3000,\n";
-        configOut << "  \"solidConductivityWMK\": 138,\n";
+        configOut << "  \"solidConductivityWMK\": 138,\n"; // Mo
         configOut << "  \"cellHeightum\": 100,\n";
         configOut << "  \"cellWidthum\": 100,\n";
         configOut << "  \"particleVolumeFraction\": 0.01,\n";
@@ -63,23 +63,27 @@ config inputConfig() {
     newConfig.particleVolFraction = j["particleVolumeFraction"];
     newConfig.liqSolIntE = j["LiqSolIntEnergyJm2"];
     newConfig.liqSolIntWidth = j["LiqSolIntWidthum"];
+    newConfig.liqSolIntWidth = newConfig.liqSolIntWidth*1e-6;
     newConfig.phaseCoefficient = 0.75*newConfig.liqSolIntWidth * newConfig.liqSolIntE;
     newConfig.barrierHeightGrain = j["GrainBarrierHeightCoefficient"];
+    newConfig.barrierHeightGrain = newConfig.barrierHeightGrain*1e-6;
     newConfig.barrierHeightPhase = j["PhaseBarrierHeightCoefficient"];
+    newConfig.barrierHeightPhase = newConfig.barrierHeightPhase*1e-6;
     newConfig.basePlateTemp = j["BasePlateTempK"];
     newConfig.meltTemp = j["meltTemp"];
     newConfig.heatCapacity = j["HeatCapacityJKgK"];
     newConfig.density = j["Densitykgm3"];
     newConfig.kLiquid = newConfig.kSolid * 0.45; 
+    newConfig.grainIntWidth = j["GrainIntWidthum"];
+    newConfig.grainIntWidth = newConfig.grainIntWidth*1e-6;
+    newConfig.grainIntE = j["GrainIntEnergyJm2"];
+    newConfig.grainIntE = newConfig.grainIntE*1e-12;
     newConfig.phasePreCo = 0.75*newConfig.liqSolIntE/(newConfig.barrierHeightPhase*newConfig.liqSolIntWidth);
     newConfig.grainPreCo = 0.75*newConfig.grainIntE/(newConfig.barrierHeightGrain*newConfig.grainIntWidth);
     newConfig.phaseGradCo = 0.75*newConfig.liqSolIntE*newConfig.liqSolIntWidth;
     newConfig.particleSlowingCoefficient = 0;
     newConfig.success = 1;
-    
- 
-
-
+    newConfig.grainGradCo = 0.5*newConfig.grainIntWidth;
 
     std::cout << "The Step Size is " << newConfig.dx << std::endl;
     int height = static_cast<int>(std::ceil(newConfig.cellHeight / newConfig.dx));
@@ -221,15 +225,17 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
 
             //std::cout <<" NewTemp: " << grid[i][j].temp << std::endl;
             //std::cout << "Old Phase: " <<grid[i][j].phase;
-            grid[i][j].phase = grid[i][j].phase - modelConf.dt*0.0001*(1/(modelConf.dx*modelConf.dx))*phaseDiffEn[i][j];
+            grid[i][j].phase -= modelConf.dt * (1.0 / (modelConf.dx * modelConf.dx)) * phaseDiffEn[i][j];
             //std::cout << "3";
             //std::cout << "Help";
             //std::cout << " New Phase: " <<grid[i][j].phase << std::endl;
-            for (int g = 0; g < numGrains;g++) {
+            for (int g = 0; g < numGrains; g++) {
                 //std::cout << "What";
                 //std::cout << numGrains << "Nums" << std::endl;
                 //std::cout << grainDiffEn[i][j][g] << std::endl;
-                grid[i][j].grainPhases[g] = grid[i][j].grainPhases[g] - modelConf.dt*(1/(modelConf.dx*modelConf.dx))*grainDiffEn[i][j][g];
+                //std::cout << "Old Grain Phase: " << grid[i][j].grainPhases[g] << std::endl;
+                grid[i][j].grainPhases[g] -= modelConf.dt * (1.0 / (modelConf.dx * modelConf.dx)) * grainDiffEn[i][j][g];
+                //std::cout << "New Grain Phase: " << grid[i][j].grainPhases[g] << std::endl;
             }
 
             //std::cout << "Final Phase: " << grid[i][j].phase << std::endl;
@@ -252,18 +258,24 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
                     grid[i][j].grainPhases[g] = 0;
                 }
             }
-            //if (grid[i][j].temp < modelConf.meltTemp*0.5) {
-
-                //if (grid[i][j].phase < 0.1) {
-                  //  grid[i][j].phase = 1;
-                    //addGrain({i,j},modelConf);
-                //}
-           // }
+            if (grid[i][j].temp < modelConf.meltTemp*0.1) {
+            // Only nucleate if no grain phase is already 1 at this location
+                bool grainExists = false;
+                for (int g = 0; g < numGrains; ++g) {
+                    if (grid[i][j].grainPhases[g] > 0.99) {
+                        grainExists = true;
+                        break;
+                    }
+                }
+                if (!grainExists && grid[i][j].phase < 0.7) {
+                    grid[i][j].phase = 1;
+                    addGrain({i,j},modelConf);
+                }
+            }
         }
     }
 
 }
 
 
-       
-      
+
