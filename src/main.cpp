@@ -20,13 +20,13 @@ int main() {
     std::vector<std::vector<std::vector<double>>> grainDiffEn(configData.steps[0],std::vector<std::vector<double>>(configData.steps[1],std::vector<double>(model.numGrains)));
     std::vector<std::vector<double>> phaseDiffEn(configData.steps[0],std::vector<double>(configData.steps[1]));
     std::vector<std::vector<double>> tempGrad;
-    std::vector<int> nucLoc = {37,20};
-
-    
 
 
     
-    for (int t = 0; t < 10; t++) {
+
+
+    
+    for (int t = 0; t < 200; t++) {
         std::cout << t << std::endl;
         grainDiffEn = calcGrainDiffEnergy(model,configData);
         phaseDiffEn = calcPhaseDiffEnergy(model,configData);
@@ -34,15 +34,7 @@ int main() {
 
         model.update(phaseDiffEn,tempGrad,grainDiffEn,configData); 
     }
-    model.addGrain(nucLoc,configData);
-    for (int t = 0; t < 100; t++) {
-        std::cout << t << std::endl;
-        grainDiffEn = calcGrainDiffEnergy(model,configData);
-        phaseDiffEn = calcPhaseDiffEnergy(model,configData);
-        tempGrad = calcTempDiff(model,configData);
 
-        model.update(phaseDiffEn,tempGrad,grainDiffEn,configData); 
-    }
 
 
 
@@ -56,11 +48,11 @@ int main() {
     if (!output_file1.is_open()) {
         std::cerr << "Error: Could not open file " << fileNameTemp << std::endl;
     }
-    for (int i=0;i < configData.steps[0]-1;i++) {
-        for (int j=0;j < configData.steps[1]-2;j++) {
+    for (int i=0;i < configData.steps[0];i++) {
+        for (int j=0;j < configData.steps[1];j++) {
             output_file1 << model.grid[i][j].temp << ',';
         }
-        output_file1 << model.grid[i][configData.steps[1]-1].temp << std::endl;
+        output_file1 << std::endl;
     }
     output_file1.close();
     std::string fileNamePhase = "PhaseGrid";
@@ -68,11 +60,11 @@ int main() {
     if (!output_file2.is_open()) {
         std::cerr << "Error: Could not open file " << fileNamePhase << std::endl;
     }
-    for (int i=0;i < configData.steps[0]-1;i++) {
-        for (int j=0;j < configData.steps[1]-2;j++) {
+    for (int i=0;i < configData.steps[0];i++) {
+        for (int j=0;j < configData.steps[1];j++) {
             output_file2 << model.grid[i][j].phase << ',';
         }
-        output_file2 << model.grid[i][configData.steps[1]-1].phase << std::endl;
+        output_file2  << std::endl;
     }
     std::cout << "Calc Completed, Saved Data";
     output_file2.close();
@@ -80,8 +72,8 @@ int main() {
     std::string fileNameGrain = "GrainGrid";
     std::ofstream output_file3(fileNameGrain);
     for (int g = 0; g < model.numGrains;g++) {
-        for (int i=0;i < configData.steps[0]-1;i++) {
-            for (int j=0;j < configData.steps[1]-2;j++) { 
+        for (int i=0;i < configData.steps[0];i++) {
+            for (int j=0;j < configData.steps[1];j++) { 
                 
                 output_file3 << model.grid[i][j].grainPhases[g] << ',';
 

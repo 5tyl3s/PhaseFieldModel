@@ -77,7 +77,7 @@ config inputConfig() {
     newConfig.grainIntWidth = j["GrainIntWidthum"];
     newConfig.grainIntWidth = newConfig.grainIntWidth*1e-6;
     newConfig.grainIntE = j["GrainIntEnergyJm2"];
-    newConfig.grainIntE = newConfig.grainIntE*1e-12;
+    newConfig.grainIntE = newConfig.grainIntE;
     newConfig.phasePreCo = 0.75*newConfig.liqSolIntE/(newConfig.barrierHeightPhase*newConfig.liqSolIntWidth);
     newConfig.grainPreCo = 0.75*newConfig.grainIntE/(newConfig.barrierHeightGrain*newConfig.grainIntWidth);
     newConfig.phaseGradCo = 0.75*newConfig.liqSolIntE*newConfig.liqSolIntWidth;
@@ -197,7 +197,8 @@ void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
     double one = 1.000;
     //std::cout << "hi";
 
-    grid[nucleus[0]][nucleus[1]].grainPhases[numGrains-1] = one;
+    grid[nucleus[0]][nucleus[1]].grainPhases[numGrains-1] = 1;
+    grid[nucleus[0]][nucleus[1]].phase = 1;
     //std::cout << "hi";
     eulerAngles tempRots = {dist(gen),dist(gen),dist(gen)};
     ////std::cout << tempRots.theta1;
@@ -207,6 +208,9 @@ void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
 }
 void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector<std::vector<double>> tempGrad, std::vector<std::vector<std::vector<double>>> grainDiffEn, config modelConf) {
     //std::cout << "\n\n\nStart Update:\n"; 
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::normal_distribution<> dist(-3.1,1);
     for (int i = 0; i < modelConf.steps[0]; i++) {
         for (int j = 0; j < modelConf.steps[1]; j++) {
             //std::cout <<"OldTemp: " << grid[i][j].temp;
@@ -234,7 +238,10 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
                 //std::cout << numGrains << "Nums" << std::endl;
                 //std::cout << grainDiffEn[i][j][g] << std::endl;
                 //std::cout << "Old Grain Phase: " << grid[i][j].grainPhases[g] << std::endl;
-                grid[i][j].grainPhases[g] -= modelConf.dt * (1.0 / (modelConf.dx * modelConf.dx)) * grainDiffEn[i][j][g];
+                if (grainDiffEn[i][j][g] != 0) {
+                    //std::cout << "Grain " << g << " at (" << i << "," << j << ") has a change of " << -1*grainDiffEn[i][j][g] << std::endl;
+                }
+                grid[i][j].grainPhases[g] = grid[i][j].grainPhases[g] - grainDiffEn[i][j][g];
                 //std::cout << "New Grain Phase: " << grid[i][j].grainPhases[g] << std::endl;
             }
 
@@ -258,17 +265,18 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
                     grid[i][j].grainPhases[g] = 0;
                 }
             }
-            if (grid[i][j].temp < modelConf.meltTemp*0.1) {
+            if (grid[i][j].temp < modelConf.meltTemp*0.9) {
             // Only nucleate if no grain phase is already 1 at this location
                 bool grainExists = false;
+ 
                 for (int g = 0; g < numGrains; ++g) {
-                    if (grid[i][j].grainPhases[g] > 0.99) {
+                    if (grid[i][j].grainPhases[g] > 0.01) {
                         grainExists = true;
                         break;
                     }
                 }
-                if (!grainExists && grid[i][j].phase < 0.7) {
-                    grid[i][j].phase = 1;
+                if (!grainExists & dist(gen) > 0) {
+                    
                     addGrain({i,j},modelConf);
                 }
             }

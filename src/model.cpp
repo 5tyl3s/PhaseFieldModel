@@ -47,7 +47,7 @@ std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config mod
 double sumOtherGrainsSquared(int notIndex,node Node, int numGrains) {
     double notThisGrain = 0;
     for (int gr = 0; gr < numGrains;gr++) {
-        notThisGrain = notThisGrain + Node.grainPhases[gr];
+        notThisGrain = notThisGrain + (Node.grainPhases[gr]*Node.grainPhases[gr]);
     }
     return notThisGrain-(Node.grainPhases[notIndex]*Node.grainPhases[notIndex]);
     
@@ -66,17 +66,38 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
                     field.grid[i][j].neighbors[2]->grainPhases[g] +
                     field.grid[i][j].neighbors[3]->grainPhases[g] -
                     4 * gra
-                ) * modelConfig.grainGradCo;
+                ) * -1*modelConfig.grainGradCo;
+                
                 // Competition term
                 double comp = sumOtherGrainsSquared(g, field.grid[i][j], field.numGrains);
+                //std::cout << "Competition: " << comp << std::endl;
                 // Only allow growth in solid
                 double solid = 1.0 - ifLiq(field.grid[i][j].temp, modelConfig.meltTemp);
+                
                 // Double-well + competition + solid coupling
-                double grainEnergy = modelConfig.grainPreCo *
-                    (gra * gra * gra * gra - gra + 8 * gra * comp + 2 * gra * solid * solid);
                 // Optionally, include orientation dependence if desired
-                // double gbEnergy = calcGrainBoundaryEnergy(field.orientations[g], ...);
-                diffFree[i][j][g] = grainGrad + grainEnergy;
+                 double gbEnergy = calcGrainBoundaryEnergy(field.orientations[g],{
+                    0.5*field.grid[i][j].neighbors[0]->grainPhases[g] + 0.5*field.grid[i][j].neighbors[1]->grainPhases[g]-field.grid[i][j].grainPhases[g],
+                    0.5*field.grid[i][j].neighbors[2]->grainPhases[g] + 0.5*field.grid[i][j].neighbors[3]->grainPhases[g]-field.grid[i][j].grainPhases[g],
+                 });
+                grainGrad = grainGrad * gbEnergy;
+                //std::cout<<"BoundaryEnergy: "<< gbEnergy << std::endl;
+
+                double grainEnergy = modelConfig.grainPreCo * (gra * gra * gra * gra - gra + (1000/modelConfig.cellArea)* gra * comp * gbEnergy * modelConfig.grainIntWidth + 2 * gra * solid * solid);
+                
+
+                
+                diffFree[i][j][g] = modelConfig.dt*(grainGrad + grainEnergy);
+                //std::cout<<"Total Grain Energy: " << diffFree[i][j][g] << std::endl;
+                //if (grainEnergy >100000000000000) {
+                  //  std::cout << "doubleWell"<< gra*gra*gra*gra-gra << std::endl;
+                    //std::cout << "Comp: " << comp*2*gra*gbEnergy*modelConfig.grainIntWidth << std::endl;
+                  //  std::cout << "Solid: " << 2*gra*solid*solid << std::endl;
+                 //   std::cout << "ModelScaling: " << modelConfig.grainPreCo << std::endl;
+                //    std::cout << "Grain Energy: " << grainEnergy << std::endl;
+               //     std::cout << "Grain Gradient: " << grainGrad << std::endl;
+              //      std::cout << "totalEnergy: " << diffFree[i][j][g] << std::endl <<std::endl;
+              //  }
             }
         }
     }
@@ -124,11 +145,16 @@ double ifLiq(double temp, double meltTemp) {
 
 double calcGrainBoundaryEnergy(eulerAngles orient, std::vector<double> gradient) {
     std::vector<double> gradNormal = {-1*gradient[1],1*gradient[0],0};
-    std::vector<double> surfPlaneVec =eulerRotate(orient,gradNormal);
 
+    std::vector<double> surfPlaneVec =eulerRotate(orient,gradNormal);
+    
     double angle110 = dotAngle(surfPlaneVec,std::vector<double> {1,1,0});
     double angle111 = dotAngle(surfPlaneVec,std::vector<double> {1,1,1});
     double angle100 = dotAngle(surfPlaneVec,std::vector<double> {1,0,0});
+    if (std::isnan(angle110)) { 
+        return 0;
+    }
+
 
     if (angle110 < angle111) {
         if (angle110 < angle100) {
@@ -142,7 +168,13 @@ double calcGrainBoundaryEnergy(eulerAngles orient, std::vector<double> gradient)
     } else {
         return 3.192;
     }
-    std::cerr << "Grain Boundary Calculation Failed See model.cpp";
+    std::cerr << gradNormal[0] << " " << gradNormal[1] << " " << gradNormal[2] << std::endl;
+
+    std::cerr << surfPlaneVec[0] << surfPlaneVec[1] << surfPlaneVec[2] << std::endl;
+    std::cerr << angle110 << std::endl;
+    std::cerr << angle111 << std::endl;
+    std::cerr << angle100 << std::endl;
+    std::cerr << "Grain Boundary Calculation Failed See model.cpp" << std::endl;
     return 999;
 
 
@@ -193,18 +225,26 @@ std::vector<double> eulerRotate(eulerAngles orient, std::vector<double> rotatedV
 }
 
 double dotAngle(std::vector<double> vec1, std::vector<double> vec2) {
+    //std::cout << "Vector 1: " << vec1[0] << ", " << vec1[1] << ", " << vec1[2] << std::endl;
+    //std::cout << "Vector 2: " << vec2[0] << ", " << vec2[1] << ", " << vec2[2] << std::endl;
     double adotb = vec1[0]*vec2[0]+vec1[1]*vec2[1]+vec1[2]*vec2[2];
+    //std::cout << "Dot Product: " << adotb << std::endl;
     double mag1 = std::sqrt((vec1[0]*vec1[0])+(vec1[1]*vec1[1])+(vec1[2]*vec1[2]));
+    //std::cout << "Magnitude 1: " << mag1 << std::endl;
     double mag2 = std::sqrt((vec2[0]*vec2[0])+(vec2[1]*vec2[1])+(vec2[2]*vec2[2]));
+    //std::cout << "Magnitude 2: " << mag2 << std::endl;
+    //std::cout << "Acos of this: " << (adotb/(mag1*mag2)) << std::endl;
     double angle = acos(adotb/(mag1*mag2));
+
     while (angle > 90) {
         angle = angle - 90;
     }
     while (angle < 0) {
         angle = angle + 90;
     }
+    //std::cout << angle << std::endl;
     return angle;
 
 }
-
+    
 
