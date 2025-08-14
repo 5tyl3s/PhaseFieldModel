@@ -4,7 +4,7 @@
   "HeatCapacityJKgK": 251,
   "Densitykgm3": 10280,
   "dt_s": 0.00000005,
-  "startTempK": 3200,
+  "startTempK": 3000,
   "solidConductivityWMK": 138,
   "cellHeightum": 1000,
   "cellWidthum": 1000,
