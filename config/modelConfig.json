@@ -4,7 +4,7 @@
   "HeatCapacityJKgK": 251,
   "Densitykgm3": 10280,
   "dt_s": 0.00000005,
-  "startTempK": 3000,
+  "startTempK": 2950,
   "solidConductivityWMK": 138,
   "cellHeightum": 1000,
   "cellWidthum": 1000,
@@ -14,6 +14,6 @@
   "GrainIntEnergyJm2": 4,
   "GrainIntWidthum": 1,
   "PhaseBarrierHeightCoefficient": 5,
-  "BasePlateTempK": 800,
+  "BasePlateTempK": 300,
   "GrainBarrierHeightCoefficient": 5
 }

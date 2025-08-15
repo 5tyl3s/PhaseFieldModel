@@ -7,6 +7,8 @@
 #include <cmath>
 #include "json.hpp" 
 using json = nlohmann::json;
+#include <mutex>
+static std::mutex grain_mutex;
 
 config inputConfig() {
     config newConfig;
@@ -206,13 +208,20 @@ void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
     //std::cout << "Hi";
 
 }
-void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector<std::vector<double>> tempGrad, std::vector<std::vector<std::vector<double>>> grainDiffEn, config modelConf) {
+void gridField::update(
+    std::vector<std::vector<double>> &phaseDiffEn,
+    std::vector<std::vector<double>> &tempGrad,
+    std::vector<std::vector<std::vector<double>>> &grainDiffEn,
+    config &modelConf,
+    int i_start, int i_end, int j_start, int j_end
+) {
     //std::cout << "\n\n\nStart Update:\n"; 
     std::random_device rd;
     std::mt19937 gen(rd());
     std::normal_distribution<> dist(-3.1,1);
-    for (int i = 0; i < modelConf.steps[0]; i++) {
-        for (int j = 0; j < modelConf.steps[1]; j++) {
+    std::uniform_real_distribution<> prob_dist(0.0, 1.0);
+    for (int i = i_start; i < i_end; i++) {
+        for (int j = j_start; j < j_end; j++) {
             //std::cout <<"OldTemp: " << grid[i][j].temp;
             //std::cout << "Thermal Diffusivity: " << (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity))) << std::endl;
             //std::cout << "Keff: " << modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)) << std::endl;
@@ -249,8 +258,8 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
         }
     }
 
-    for (int i = 0; i < modelConf.steps[0]; i++) {
-        for (int j = 0; j < modelConf.steps[1]; j++) {
+    for (int i = i_start; i < i_end; i++) {
+        for (int j = j_start; j < j_end; j++) {
             if (grid[i][j].phase > 1) {
                 grid[i][j].phase = 1;
             }
@@ -266,23 +275,31 @@ void gridField::update(std::vector<std::vector<double>> phaseDiffEn, std::vector
                 }
             }
             if (grid[i][j].temp < modelConf.meltTemp*0.9) {
-            // Only nucleate if no grain phase is already 1 at this location
                 bool grainExists = false;
- 
                 for (int g = 0; g < numGrains; ++g) {
                     if (grid[i][j].grainPhases[g] > 0.01) {
                         grainExists = true;
                         break;
                     }
                 }
-                if (!grainExists & dist(gen) > 0) {
-                    
+                // 0.01% chance of nucleation
+                if (!grainExists && prob_dist(gen) < 0.0001) {
+                    std::lock_guard<std::mutex> lock(grain_mutex);
                     addGrain({i,j},modelConf);
                 }
             }
         }
     }
 
+}
+
+void gridField::resizeGrainDiffEn(std::vector<std::vector<std::vector<double>>>& grainDiffEn, int numGrains) {
+    for (auto& row : grainDiffEn) {
+        for (auto& cell : row) {
+            if (cell.size() != numGrains)
+                cell.resize(numGrains, 0.0);
+        }
+    }
 }
 
 

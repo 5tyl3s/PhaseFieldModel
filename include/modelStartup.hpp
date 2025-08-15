@@ -60,23 +60,27 @@ struct eulerAngles {
     double theta2;
 };
 struct gridField {
-
-
     std::vector<std::vector<node>> grid;
     void buildGrid(int heightSteps, int widthSteps);
     void init(config modelConfig);
-    
+
     int numGrains;
     std::vector<eulerAngles> orientations; // Theta1 Phi Theta2 Euler Angles
     node top;
-
     node bottom;
     std::vector<int> grainLocTemporary;
 
-
     void addGrain(std::vector<int> nucleus, config modelConf);
-    void update(std::vector<std::vector<double>> phaseDiffEn, std::vector<std::vector<double>> tempGrad, std::vector<std::vector<std::vector<double>>> grainDiffEn, config modelConf);
 
+    // Updated update function for quadrant support:
+    void update(
+        std::vector<std::vector<double>> &phaseDiffEn,
+        std::vector<std::vector<double>> &tempGrad,
+        std::vector<std::vector<std::vector<double>>> &grainDiffEn,
+        config &modelConf,
+        int i_start, int i_end, int j_start, int j_end
+    );
+    void resizeGrainDiffEn(std::vector<std::vector<std::vector<double>>>& grainDiffEn, int numGrains);
 };
 
 

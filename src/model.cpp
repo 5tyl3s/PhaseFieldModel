@@ -246,5 +246,105 @@ double dotAngle(std::vector<double> vec1, std::vector<double> vec2) {
     return angle;
 
 }
-    
+
+void calcPhaseDiffEnergyRegion(gridField& field, config& modelConfig,
+    std::vector<std::vector<double>>& diffFree,
+    int i_start, int i_end, int j_start, int j_end) {
+    double pha, eLoc, eGrad;
+    for (int ii = i_start; ii < i_end; ii++) {
+        for (int jj = j_start; jj < j_end; jj++) {
+            pha = field.grid[ii][jj].phase;
+            double liq = ifLiq(field.grid[ii][jj].temp, modelConfig.meltTemp);
+            eLoc = modelConfig.phaseCoefficient * (
+                -2 * (1 - pha) * liq + 2 * pha * (1 - liq)
+            );
+            double grainSum = 0.0;
+            for (int g = 0; g < field.numGrains; g++) {
+                grainSum += field.grid[ii][jj].grainPhases[g] * field.grid[ii][jj].grainPhases[g];
+            }
+            eLoc += modelConfig.grainPreCo * (-2 * (1 - pha) * grainSum);
+            eLoc += 2 * pha * (modelConfig.particleSlowingCoefficient * field.grid[ii][jj].particleComp);
+            eGrad = (field.grid[ii][jj].neighbors[0]->phase +
+                     field.grid[ii][jj].neighbors[1]->phase +
+                     field.grid[ii][jj].neighbors[2]->phase +
+                     field.grid[ii][jj].neighbors[3]->phase - 4 * pha) * modelConfig.phaseGradCo;
+            diffFree[ii][jj] = eLoc + eGrad;
+        }
+    }
+}
+
+void calcGrainDiffEnergyRegion(gridField& field, config& modelConfig,
+    std::vector<std::vector<std::vector<double>>>& diffFree,
+    int i_start, int i_end, int j_start, int j_end) {
+    for (int i = i_start; i < i_end; i++) {
+        for (int j = j_start; j < j_end; j++) {
+            for (int g = 0; g < field.numGrains; g++) {
+                double gra = field.grid[i][j].grainPhases[g];
+                double grainGrad = (
+                    field.grid[i][j].neighbors[0]->grainPhases[g] +
+                    field.grid[i][j].neighbors[1]->grainPhases[g] +
+                    field.grid[i][j].neighbors[2]->grainPhases[g] +
+                    field.grid[i][j].neighbors[3]->grainPhases[g] -
+                    4 * gra
+                ) * -1 * modelConfig.grainGradCo;
+
+                double comp = sumOtherGrainsSquared(g, field.grid[i][j], field.numGrains);
+                double solid = 1.0 - ifLiq(field.grid[i][j].temp, modelConfig.meltTemp);
+
+                double gbEnergy = calcGrainBoundaryEnergy(field.orientations[g], {
+                    0.5 * field.grid[i][j].neighbors[0]->grainPhases[g] + 0.5 * field.grid[i][j].neighbors[1]->grainPhases[g] - field.grid[i][j].grainPhases[g],
+                    0.5 * field.grid[i][j].neighbors[2]->grainPhases[g] + 0.5 * field.grid[i][j].neighbors[3]->grainPhases[g] - field.grid[i][j].grainPhases[g],
+                });
+                grainGrad = grainGrad * gbEnergy;
+
+                double grainEnergy = modelConfig.grainPreCo * (gra * gra * gra * gra - gra + (1000 / modelConfig.cellArea) * gra * comp * gbEnergy * modelConfig.grainIntWidth + 2 * gra * solid * solid);
+
+                diffFree[i][j][g] = modelConfig.dt * (grainGrad + grainEnergy);
+            }
+        }
+    }
+}
+
+void calcTempDiffRegion(gridField& field, config& modelConfig,
+    std::vector<std::vector<double>>& tempDiff,
+    int i_start, int i_end, int j_start, int j_end) {
+    // Top boundary
+    if (i_start == 0) {
+        for (int j = j_start; j < j_end; j++) {
+            tempDiff[0][j] = (1 / (modelConfig.dx * modelConfig.dx)) *
+                (field.grid[0][j].neighbors[0]->temp +
+                 field.grid[0][j].neighbors[1]->temp +
+                 field.grid[0][j].neighbors[3]->temp -
+                 (3 * field.grid[0][j].temp));
+        }
+    }
+
+    // Interior
+    for (int i = std::max(i_start, 1); i < std::min(i_end, modelConfig.steps[0] - 1); i++) {
+        for (int j = j_start; j < j_end; j++) {
+            tempDiff[i][j] = (1 / (modelConfig.dx * modelConfig.dx)) *
+                (field.grid[i][j].neighbors[0]->temp +
+                 field.grid[i][j].neighbors[1]->temp +
+                 field.grid[i][j].neighbors[2]->temp +
+                 field.grid[i][j].neighbors[3]->temp -
+                 4 * field.grid[i][j].temp);
+        }
+    }
+
+    // Bottom boundary
+    int bottomMostStep = modelConfig.steps[0] - 1;
+    if (i_end == modelConfig.steps[0]) {
+        for (int j = j_start; j < j_end; j++) {
+            tempDiff[bottomMostStep][j] = (1 / (modelConfig.dx * modelConfig.dx)) *
+                (field.grid[bottomMostStep][j].neighbors[0]->temp +
+                 field.grid[bottomMostStep][j].neighbors[1]->temp +
+                 field.grid[bottomMostStep][j].neighbors[2]->temp +
+                 modelConfig.basePlateTemp -
+                 (4 * field.grid[bottomMostStep][j].temp));
+        }
+    }
+}
+
+
+
 
