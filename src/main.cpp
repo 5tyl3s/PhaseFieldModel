@@ -36,35 +36,53 @@ int main() {
     int i_mid = configData.steps[0] / 2;
     int j_mid = configData.steps[1] / 2;
 
-    for (int t = 0; t < 30000; t++) {
+    for (int t = 0; t < 300; t++) {
         std::cout << t << std::endl;
 
         // Launch threads to calculate each quadrant of each field
-        std::thread th1([&](){
-            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, 0, i_mid, 0, j_mid);
+        std::thread th11([&](){
             calcPhaseDiffEnergyRegion(model, configData, phaseDiffEn, 0, i_mid, 0, j_mid);
             calcTempDiffRegion(model, configData, tempGrad, 0, i_mid, 0, j_mid);
         });
-        std::thread th2([&](){
-            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, 0, i_mid, j_mid, configData.steps[1]);
+        std::thread th12([&](){
+            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, 0, i_mid, 0, j_mid);
+        });
+
+
+        std::thread th21([&](){
             calcPhaseDiffEnergyRegion(model, configData, phaseDiffEn, 0, i_mid, j_mid, configData.steps[1]);
             calcTempDiffRegion(model, configData, tempGrad, 0, i_mid, j_mid, configData.steps[1]);
         });
-        std::thread th3([&](){
-            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, i_mid, configData.steps[0], 0, j_mid);
+        std::thread th22([&](){
+            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, 0, i_mid, j_mid, configData.steps[1]);
+        });
+
+        
+        std::thread th31([&](){
             calcPhaseDiffEnergyRegion(model, configData, phaseDiffEn, i_mid, configData.steps[0], 0, j_mid);
             calcTempDiffRegion(model, configData, tempGrad, i_mid, configData.steps[0], 0, j_mid);
         });
-        std::thread th4([&](){
-            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, i_mid, configData.steps[0], j_mid, configData.steps[1]);
+        std::thread th32([&](){
+            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, i_mid, configData.steps[0], 0, j_mid);
+        });
+
+
+        std::thread th41([&](){
             calcPhaseDiffEnergyRegion(model, configData, phaseDiffEn, i_mid, configData.steps[0], j_mid, configData.steps[1]);
             calcTempDiffRegion(model, configData, tempGrad, i_mid, configData.steps[0], j_mid, configData.steps[1]);
         });
+        std::thread th42([&](){
+            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, i_mid, configData.steps[0], j_mid, configData.steps[1]);
+        });
 
-        th1.join();
-        th2.join();
-        th3.join();
-        th4.join();
+        th11.join();
+        th12.join();
+        th21.join();
+        th22.join();
+        th31.join();
+        th32.join();
+        th41.join();
+        th42.join();
 
         // Now update the entire grid in a single call
         model.update(phaseDiffEn, tempGrad, grainDiffEn, configData, 0, configData.steps[0], 0, configData.steps[1]);
