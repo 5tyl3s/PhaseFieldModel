@@ -33,58 +33,41 @@ int main() {
     std::vector<std::vector<double>> phaseDiffEn(configData.steps[0],std::vector<double>(configData.steps[1]));
     std::vector<std::vector<double>> tempGrad(configData.steps[0],std::vector<double>(configData.steps[1]));
 
-    int i_mid = configData.steps[0] / 2;
-    int j_mid = configData.steps[1] / 2;
+    // Calculate section sizes for 4x4 grid
+    int i_eighth = configData.steps[0] / 4;
+    int j_eighth = configData.steps[1] / 4;
 
-    for (int t = 0; t < 300; t++) {
+    for (int t = 0; t < 1500; t++) {
         std::cout << t << std::endl;
+        std::vector<std::thread> threads;
 
-        // Launch threads to calculate each quadrant of each field
-        std::thread th11([&](){
-            calcPhaseDiffEnergyRegion(model, configData, phaseDiffEn, 0, i_mid, 0, j_mid);
-            calcTempDiffRegion(model, configData, tempGrad, 0, i_mid, 0, j_mid);
-        });
-        std::thread th12([&](){
-            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, 0, i_mid, 0, j_mid);
-        });
+        // Create 16 threads in a 4x4 grid
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                int i_start = i * i_eighth;
+                int i_end = (i == 3) ? configData.steps[0] : (i + 1) * i_eighth;
+                int j_start = j * j_eighth;
+                int j_end = (j == 3) ? configData.steps[1] : (j + 1) * j_eighth;
 
+                // Launch phase and temp calculations
+                threads.push_back(std::thread([&, i_start, i_end, j_start, j_end]() {
+                    calcPhaseDiffEnergyRegion(model, configData, phaseDiffEn, i_start, i_end, j_start, j_end);
+                    calcTempDiffRegion(model, configData, tempGrad, i_start, i_end, j_start, j_end);
+                }));
 
-        std::thread th21([&](){
-            calcPhaseDiffEnergyRegion(model, configData, phaseDiffEn, 0, i_mid, j_mid, configData.steps[1]);
-            calcTempDiffRegion(model, configData, tempGrad, 0, i_mid, j_mid, configData.steps[1]);
-        });
-        std::thread th22([&](){
-            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, 0, i_mid, j_mid, configData.steps[1]);
-        });
+                // Launch grain calculations
+                threads.push_back(std::thread([&, i_start, i_end, j_start, j_end]() {
+                    calcGrainDiffEnergyRegion(model, configData, grainDiffEn, i_start, i_end, j_start, j_end);
+                }));
+            }
+        }
 
-        
-        std::thread th31([&](){
-            calcPhaseDiffEnergyRegion(model, configData, phaseDiffEn, i_mid, configData.steps[0], 0, j_mid);
-            calcTempDiffRegion(model, configData, tempGrad, i_mid, configData.steps[0], 0, j_mid);
-        });
-        std::thread th32([&](){
-            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, i_mid, configData.steps[0], 0, j_mid);
-        });
+        // Join all threads
+        for (auto& thread : threads) {
+            thread.join();
+        }
 
-
-        std::thread th41([&](){
-            calcPhaseDiffEnergyRegion(model, configData, phaseDiffEn, i_mid, configData.steps[0], j_mid, configData.steps[1]);
-            calcTempDiffRegion(model, configData, tempGrad, i_mid, configData.steps[0], j_mid, configData.steps[1]);
-        });
-        std::thread th42([&](){
-            calcGrainDiffEnergyRegion(model, configData, grainDiffEn, i_mid, configData.steps[0], j_mid, configData.steps[1]);
-        });
-
-        th11.join();
-        th12.join();
-        th21.join();
-        th22.join();
-        th31.join();
-        th32.join();
-        th41.join();
-        th42.join();
-
-        // Now update the entire grid in a single call
+        // Update the entire grid in a single call
         model.update(phaseDiffEn, tempGrad, grainDiffEn, configData, 0, configData.steps[0], 0, configData.steps[1]);
         model.resizeGrainDiffEn(grainDiffEn, model.numGrains);
     }

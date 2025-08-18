@@ -283,7 +283,7 @@ void gridField::update(
                     }
                 }
                 // 0.01% chance of nucleation
-                if (!grainExists && prob_dist(gen) < 0.0001) {
+                if (!grainExists && prob_dist(gen) < 0.00001) {
                     std::lock_guard<std::mutex> lock(grain_mutex);
                     addGrain({i,j},modelConf);
                 }
