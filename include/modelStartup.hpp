@@ -20,6 +20,7 @@ struct config {
     double particleVolFraction;
     double liqSolIntWidth; //um
     double grainIntWidth; //um
+    int timeSteps;
 
     int totalSteps;
     double liqSolIntE;

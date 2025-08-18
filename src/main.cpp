@@ -37,8 +37,8 @@ int main() {
     int i_eighth = configData.steps[0] / 4;
     int j_eighth = configData.steps[1] / 4;
 
-    for (int t = 0; t < 500; t++) {
-        std::cout << t << std::endl;
+    for (int t = 0; t < configData.timeSteps; t++) {
+        std::cout << t << "/" << configData.timeSteps << std::endl;
         std::vector<std::thread> threads;
 
         // Create 16 threads in a 4x4 grid

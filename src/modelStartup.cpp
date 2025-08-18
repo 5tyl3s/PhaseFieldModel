@@ -40,7 +40,10 @@ config inputConfig() {
         configOut << "  \"PhaseBarrierHeightCoefficient\": 0.25,\n";
         configOut << "  \"BasePlateTempK\": 500.00,\n";
         configOut << "  \"HomogeneousNucleationCoefficient\": 100,\n";
+        configOut << "  \"TimeSteps\": 10000,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
+    
+        
 
         configOut << "}\n";
         configOut.close();
@@ -86,6 +89,7 @@ config inputConfig() {
     newConfig.phaseGradCo = 0.75*newConfig.liqSolIntE*newConfig.liqSolIntWidth;
     newConfig.particleSlowingCoefficient = 0;
     newConfig.success = 1;
+    newConfig.timeSteps = j["TimeSteps"];
     newConfig.grainGradCo = 0.5*newConfig.grainIntWidth;
     newConfig.homoNucCoeff =j["HomogeneousNucleationCoefficient"];
 
