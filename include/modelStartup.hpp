@@ -36,6 +36,7 @@ struct config {
     double heatCapacity;
     double density;
     double grainGradCo;
+    double homoNucCoeff;
 
 };
 

@@ -37,7 +37,7 @@ int main() {
     int i_eighth = configData.steps[0] / 4;
     int j_eighth = configData.steps[1] / 4;
 
-    for (int t = 0; t < 1500; t++) {
+    for (int t = 0; t < 500; t++) {
         std::cout << t << std::endl;
         std::vector<std::thread> threads;
 

@@ -39,6 +39,7 @@ config inputConfig() {
         configOut << "  \"GrainIntWidthum\": 0.3,\n";
         configOut << "  \"PhaseBarrierHeightCoefficient\": 0.25,\n";
         configOut << "  \"BasePlateTempK\": 500.00,\n";
+        configOut << "  \"HomogeneousNucleationCoefficient\": 100,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
 
         configOut << "}\n";
@@ -86,6 +87,7 @@ config inputConfig() {
     newConfig.particleSlowingCoefficient = 0;
     newConfig.success = 1;
     newConfig.grainGradCo = 0.5*newConfig.grainIntWidth;
+    newConfig.homoNucCoeff =j["HomogeneousNucleationCoefficient"];
 
     std::cout << "The Step Size is " << newConfig.dx << std::endl;
     int height = static_cast<int>(std::ceil(newConfig.cellHeight / newConfig.dx));
@@ -283,7 +285,7 @@ void gridField::update(
                     }
                 }
                 // 0.01% chance of nucleation
-                if (!grainExists && prob_dist(gen) < 0.00001) {
+                if (!grainExists && prob_dist(gen) <(modelConf.dt*modelConf.dx*modelConf.dx*modelConf.homoNucCoeff)) {
                     std::lock_guard<std::mutex> lock(grain_mutex);
                     addGrain({i,j},modelConf);
                 }

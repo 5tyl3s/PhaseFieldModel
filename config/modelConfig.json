@@ -15,5 +15,6 @@
   "GrainIntWidthum": 1,
   "PhaseBarrierHeightCoefficient": 10,
   "BasePlateTempK": 300,
-  "GrainBarrierHeightCoefficient": 1
+  "GrainBarrierHeightCoefficient": 1,
+  "HomogeneousNucleationCoefficient": 1000000000000000
 }
