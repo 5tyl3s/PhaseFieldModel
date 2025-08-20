@@ -108,7 +108,7 @@ std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField fiel
 std::vector<std::vector<double>> calcTempDiff(gridField& field, const config& modelConfig) {
     std::vector<std::vector<double>> tempDiff(modelConfig.steps[0],std::vector<double>(modelConfig.steps[1]));
     for (int j = 0; j<modelConfig.steps[1];j++) {
-        tempDiff[0][j] = field.grid[0][j].neighbors[0]->temp + field.grid[0][j].neighbors[1]->temp + field.grid[0][j].neighbors[3]->temp - (3*field.grid[0][j].temp));
+        tempDiff[0][j] = field.grid[0][j].neighbors[0]->temp + field.grid[0][j].neighbors[1]->temp + field.grid[0][j].neighbors[3]->temp - (3*field.grid[0][j].temp);
     }
 
 

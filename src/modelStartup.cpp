@@ -41,6 +41,7 @@ config inputConfig() {
         configOut << "  \"BasePlateTempK\": 500.00,\n";
         configOut << "  \"HomogeneousNucleationCoefficient\": 100,\n";
         configOut << "  \"TimeSteps\": 10000,\n";
+        configOut << "  \"UndercoolingRequirement\": 0.95,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
     
         
@@ -92,6 +93,7 @@ config inputConfig() {
     newConfig.timeSteps = j["TimeSteps"];
     newConfig.grainGradCo = 0.5*newConfig.grainIntWidth;
     newConfig.homoNucCoeff =j["HomogeneousNucleationCoefficient"];
+    newConfig.underCoolReq = j["UndercoolingRequirement"];
 
     std::cout << "The Step Size is " << newConfig.dx << std::endl;
     int height = static_cast<int>(std::ceil(newConfig.cellHeight / newConfig.dx));
@@ -279,7 +281,7 @@ void gridField::update(
                     grid[i][j].grainPhases[g] = 0;
                 }
             }
-            if (grid[i][j].temp < modelConf.meltTemp*0.999) {
+            if (grid[i][j].temp < modelConf.meltTemp*modelConf.underCoolReq) {
                 bool grainExists = false;
                 for (int g = 0; g < numGrains; ++g) {
                     if (grid[i][j].grainPhases[g] > 0.05) {

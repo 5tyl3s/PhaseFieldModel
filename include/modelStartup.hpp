@@ -21,7 +21,7 @@ struct config {
     double liqSolIntWidth; //um
     double grainIntWidth; //um
     int timeSteps;
-
+    double underCoolReq;
     int totalSteps;
     double liqSolIntE;
     double grainIntE;
