@@ -224,7 +224,6 @@ void gridField::update(
     //std::cout << "\n\n\nStart Update:\n"; 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::normal_distribution<> dist(-3.1,1);
     std::uniform_real_distribution<> prob_dist(0.0, 1.0);
     for (int i = i_start; i < i_end; i++) {
         for (int j = j_start; j < j_end; j++) {
@@ -239,12 +238,12 @@ void gridField::update(
             //std::cout <<" OldTemp: " << grid[i][j].temp << std::endl;
             //std::cout <<  "DT: " << (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j]) << std::endl;
             //std::cout << "1";
-            grid[i][j].temp = grid[i][j].temp + (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j]);
+            grid[i][j].temp = grid[i][j].temp + (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j])/modelConf.cellArea;
             // std::cout << "2";
 
             //std::cout <<" NewTemp: " << grid[i][j].temp << std::endl;
             //std::cout << "Old Phase: " <<grid[i][j].phase;
-            grid[i][j].phase -= modelConf.dt * (0.5 / (modelConf.dx * modelConf.dx)) * phaseDiffEn[i][j];
+            grid[i][j].phase -= modelConf.dt /modelConf.cellArea * phaseDiffEn[i][j];
             //std::cout << "3";
             //std::cout << "Help";
             //std::cout << " New Phase: " <<grid[i][j].phase << std::endl;
@@ -256,7 +255,7 @@ void gridField::update(
                 if (grainDiffEn[i][j][g] != 0) {
                     //std::cout << "Grain " << g << " at (" << i << "," << j << ") has a change of " << -1*grainDiffEn[i][j][g] << std::endl;
                 }
-                grid[i][j].grainPhases[g] = grid[i][j].grainPhases[g] - 0.5*grainDiffEn[i][j][g];
+                grid[i][j].grainPhases[g] = grid[i][j].grainPhases[g] - modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][g];
                 //std::cout << "New Grain Phase: " << grid[i][j].grainPhases[g] << std::endl;
             }
 
@@ -283,7 +282,7 @@ void gridField::update(
             if (grid[i][j].temp < modelConf.meltTemp*0.999) {
                 bool grainExists = false;
                 for (int g = 0; g < numGrains; ++g) {
-                    if (grid[i][j].grainPhases[g] > 0.01) {
+                    if (grid[i][j].grainPhases[g] > 0.05) {
                         grainExists = true;
                         break;
                     }

@@ -1,6 +1,6 @@
 {
   "TimeSteps": 5000,
-  "dx_um": 5,
+  "dx_um": 10,
   "meltTemp": 2896,
   "HeatCapacityJKgK": 251,
   "Densitykgm3": 10280,
@@ -13,9 +13,9 @@
   "LiqSolIntEnergyJm2": 1,
   "LiqSolIntWidthum": 20,
   "GrainIntEnergyJm2": 4,
-  "GrainIntWidthum": 1,
-  "PhaseBarrierHeightCoefficient": 10,
+  "GrainIntWidthum": 0.01,
+  "PhaseBarrierHeightCoefficient": 0.01,
   "BasePlateTempK": 300,
-  "GrainBarrierHeightCoefficient": 1,
-  "HomogeneousNucleationCoefficient": 1000000000000000
+  "GrainBarrierHeightCoefficient": 0.01,
+  "HomogeneousNucleationCoefficient": 10000000000000000
 }
