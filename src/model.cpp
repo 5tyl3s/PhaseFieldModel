@@ -114,7 +114,7 @@ std::vector<std::vector<double>> calcTempDiff(gridField& field, const config& mo
 
     for (int i = 1; i < modelConfig.steps[0]-1; i++) {
         for (int j = 0; j < modelConfig.steps[1]; j++) {
-            tempDiff[i][j] =(field.grid[i][j].neighbors[0]->temp+field.grid[i][j].neighbors[1]->temp+field.grid[i][j].neighbors[2]->temp+field.grid[i][j].neighbors[3]->temp-4*field.grid[i][j].temp);
+            tempDiff[i][j] = field.grid[i][j].neighbors[0]->temp+field.grid[i][j].neighbors[1]->temp+field.grid[i][j].neighbors[2]->temp+field.grid[i][j].neighbors[3]->temp-4*field.grid[i][j].temp;
         }
     }
     int bottomMostStep = modelConfig.steps[0]-1;
