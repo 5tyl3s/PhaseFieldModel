@@ -38,6 +38,8 @@ struct config {
     double density;
     double grainGradCo;
     double homoNucCoeff;
+    double coolingRate; //K/s
+    double minTemp;
 
 };
 

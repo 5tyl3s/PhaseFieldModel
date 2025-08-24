@@ -42,6 +42,8 @@ config inputConfig() {
         configOut << "  \"HomogeneousNucleationCoefficient\": 100,\n";
         configOut << "  \"TimeSteps\": 10000,\n";
         configOut << "  \"UndercoolingRequirement\": 0.95,\n";
+        configOut << "  \"CoolingRateKperS\": 100,\n";
+        configOut << "  \"MinimumTempK\": 300,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
     
         
@@ -94,6 +96,9 @@ config inputConfig() {
     newConfig.grainGradCo = 0.5*newConfig.grainIntWidth;
     newConfig.homoNucCoeff =j["HomogeneousNucleationCoefficient"];
     newConfig.underCoolReq = j["UndercoolingRequirement"];
+    newConfig.coolingRate = j["CoolingRateKperS"];
+    newConfig.coolingRate = newConfig.coolingRate * newConfig.dt;
+    newConfig.minTemp = j["MinimumTempK"];
 
     std::cout << "The Step Size is " << newConfig.dx << std::endl;
     int height = static_cast<int>(std::ceil(newConfig.cellHeight / newConfig.dx));
@@ -255,13 +260,19 @@ void gridField::update(
                 //std::cout << grainDiffEn[i][j][g] << std::endl;
                 //std::cout << "Old Grain Phase: " << grid[i][j].grainPhases[g] << std::endl;
 
-                grid[i][j].grainPhases[g] = grid[i][j].grainPhases[g] - (10e11*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][g]);
+                grid[i][j].grainPhases[g] = grid[i][j].grainPhases[g] - (0.7e13*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][g]);
                 //std::cout << "New Grain Phase: " << grid[i][j].grainPhases[g] << std::endl;
             }
+            if (grid[i][j].temp < modelConf.minTemp) {
+                modelConf.coolingRate = 0;
+            }
+            grid[i][j].temp -= modelConf.coolingRate;
 
             //std::cout << "Final Phase: " << grid[i][j].phase << std::endl;
         }
     }
+    modelConf.basePlateTemp-=modelConf.coolingRate;
+
 
     for (int i = i_start; i < i_end; i++) {
         for (int j = j_start; j < j_end; j++) {
