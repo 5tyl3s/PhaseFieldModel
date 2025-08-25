@@ -50,6 +50,7 @@ config inputConfig();
 
 
 struct node {
+    int id;
     double temp;
     double phase;
     double particleComp;
@@ -65,8 +66,10 @@ struct eulerAngles {
 };
 struct gridField {
     std::vector<std::vector<node>> grid;
+    std::vector<std::vector<node*>> grainActiveNodes;
     void buildGrid(int heightSteps, int widthSteps);
     void init(config modelConfig);
+    
 
     int numGrains;
     std::vector<eulerAngles> orientations; // Theta1 Phi Theta2 Euler Angles

@@ -45,20 +45,14 @@ config inputConfig() {
         configOut << "  \"CoolingRateKperS\": 100,\n";
         configOut << "  \"MinimumTempK\": 300,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
-    
-        
-
         configOut << "}\n";
         configOut.close();
         std::cout << "Default Config Created. Please Edit and Rerun Program";
         newConfig.success = 0;
-
-
     }
     std::string line;
     json j;
     configIn >> j;
-
     newConfig.dx = j["dx_um"];
     newConfig.dx = newConfig.dx*1e-6;
     newConfig.dt = j["dt_s"];
@@ -126,12 +120,6 @@ config inputConfig() {
 void gridField::buildGrid(int widthSteps, int heightSteps) {
     std::cout << widthSteps << " wide " << heightSteps << " Tall" << std::endl;
     grid.resize(heightSteps,std::vector<node>(widthSteps));
-
-
- 
-  
-    
-
     for (int j = 0; j< widthSteps;j++) {
         node& gp = grid[0][j];
         gp.neighbors[0] = (j>0) ? &grid[0][j-1]:&grid[0][widthSteps-1]; //Left
@@ -140,7 +128,6 @@ void gridField::buildGrid(int widthSteps, int heightSteps) {
         gp.neighbors[3] = &grid[1][j]; //Down
         
     }
-
     for (int i = 1; i< heightSteps;i++) {
         for (int j = 0; j < widthSteps;j++) {
             node& gp = grid[i][j];
@@ -150,7 +137,6 @@ void gridField::buildGrid(int widthSteps, int heightSteps) {
             gp.neighbors[3] = (i<heightSteps-1) ? &grid[i+1][j]: nullptr; //Down
         };
     };
-
     for (int j = 0; j< widthSteps;j++) {
         node& gp = grid[heightSteps-1][j];
         gp.neighbors[0] = (j>0) ? &grid[heightSteps-1][j-1]:&grid[heightSteps-1][widthSteps-1]; //Left
@@ -159,10 +145,6 @@ void gridField::buildGrid(int widthSteps, int heightSteps) {
         gp.neighbors[3] = &bottom; //Down
         
     }
-
-
-
-
 
 };
 
@@ -187,6 +169,7 @@ void gridField::init(config modelConfig) {
             grid[ik][jk].particleComp = modelConfig.particleVolFraction; 
         };
     }
+
 }
 
 
@@ -203,17 +186,16 @@ void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
             grid[i][j].grainPhases.push_back(0.0);
         }
     }
-    
-
-
     top.grainPhases.push_back(0.0);
     bottom.grainPhases.push_back(0.0);
-    
-    double one = 1.000;
-    //std::cout << "hi";
 
     grid[nucleus[0]][nucleus[1]].grainPhases[numGrains-1] = 1;
     grid[nucleus[0]][nucleus[1]].phase = 1;
+    grainActiveNodes[numGrains-1].push_back(&grid[nucleus[0]][nucleus[1]]);
+    grainActiveNodes[numGrains-1].push_back(grid[nucleus[0]][nucleus[1]].neighbors[0]);
+    grainActiveNodes[numGrains-1].push_back(grid[nucleus[0]][nucleus[1]].neighbors[1]);
+    grainActiveNodes[numGrains-1].push_back(grid[nucleus[0]][nucleus[1]].neighbors[2]);
+    grainActiveNodes[numGrains-1].push_back(grid[nucleus[0]][nucleus[1]].neighbors[3]);
     //std::cout << "hi";
     eulerAngles tempRots = {dist(gen),dist(gen),dist(gen)};
     ////std::cout << tempRots.theta1;
@@ -234,44 +216,46 @@ void gridField::update(
     std::uniform_real_distribution<> prob_dist(0.0, 1.0);
     for (int i = i_start; i < i_end; i++) {
         for (int j = j_start; j < j_end; j++) {
-            //std::cout <<"OldTemp: " << grid[i][j].temp;
-            //std::cout << "Thermal Diffusivity: " << (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity))) << std::endl;
-            //std::cout << "Keff: " << modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)) << std::endl;
-            //std::cout << modelConf.kLiquid << std::endl;
-            //std::cout << modelConf.kSolid << std::endl;
-            
-            //std::cout << "Phase: " << grid[i][j].phase << std::endl;
-            //std::cout << "GradT: " << tempGrad[i][j] << std::endl;
-            //std::cout <<" OldTemp: " << grid[i][j].temp << std::endl;
-            //std::cout <<  "DT: " << (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j]) << std::endl;
-            //std::cout << "1";
-            grid[i][j].temp = grid[i][j].temp + (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j])/(modelConf.cellArea);
-            // std::cout << "2";
-
-            //std::cout <<" NewTemp: " << grid[i][j].temp << std::endl;
-            //std::cout << "Old Phase: " <<grid[i][j].phase;
+            //Update Temperature
+            grid[i][j].temp += (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j])/(modelConf.cellArea);
+            //Update Phase
             grid[i][j].phase -= modelConf.dt /modelConf.cellArea * phaseDiffEn[i][j];
-            //std::cout << "3";
-            //std::cout << "Help";
-            //std::cout << " New Phase: " <<grid[i][j].phase << std::endl;
             for (int g = 0; g < numGrains; g++) {
-                //std::cout << "What";
-                //std::cout << numGrains << "Nums" << std::endl;
-                //std::cout << grainDiffEn[i][j][g] << std::endl;
-                //std::cout << "Old Grain Phase: " << grid[i][j].grainPhases[g] << std::endl;
-
-                grid[i][j].grainPhases[g] = grid[i][j].grainPhases[g] - (0.7e13*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][g]);
-                //std::cout << "New Grain Phase: " << grid[i][j].grainPhases[g] << std::endl;
+                //Update Grains
+                grid[i][j].grainPhases[g] =- (0.7e13*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][g]);
+                if (0.7e13*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][g] < 0) {
+                    grainActiveNodes[g].push_back(grid[i][j].neighbors[0]);
+                    grainActiveNodes[g].push_back(grid[i][j].neighbors[1]);
+                    grainActiveNodes[g].push_back(grid[i][j].neighbors[2]);
+                    grainActiveNodes[g].push_back(grid[i][j].neighbors[3]);
+                }
             }
+            //Check If Min temp Reached
             if (grid[i][j].temp < modelConf.minTemp) {
                 modelConf.coolingRate = 0;
             }
+            //Update Temperature from cooling
             grid[i][j].temp -= modelConf.coolingRate;
-
-            //std::cout << "Final Phase: " << grid[i][j].phase << std::endl;
         }
     }
     modelConf.basePlateTemp-=modelConf.coolingRate;
+    for (int g = 0; g < numGrains; g++) {
+        for (int ag = 0; g < grainActiveNodes[g].size(); ag++) {
+
+                if (grainActiveNodes[g][ag]->grainPhases[g]>=1) {
+                    grainActiveNodes[g][ag]->grainPhases[g] = 1;
+                    grainActiveNodes[g].erase(
+                        std::remove_if(
+                            grainActiveNodes[g].begin(),
+                            grainActiveNodes[g].end(),
+                            [&](const node& n) {
+                                return n.id == grainActiveNodes[g][ag]->id; // match this grid node
+                            }
+                        ),
+                        grainActiveNodes[g].end()
+                    );
+                }
+    }
 
 
     for (int i = i_start; i < i_end; i++) {
@@ -282,14 +266,7 @@ void gridField::update(
             if (grid[i][j].phase < 0) {
                 grid[i][j].phase = 0;
             }
-            for (int g = 0; g < numGrains; g++) {
-                if (grid[i][j].grainPhases[g] > 1) {
-                    grid[i][j].grainPhases[g] = 1;
-                }
-                if (grid[i][j].grainPhases[g] < 0) {
-                    grid[i][j].grainPhases[g] = 0;
-                }
-            }
+            
             if (grid[i][j].temp < (modelConf.meltTemp*modelConf.underCoolReq)) {
                 bool grainExists = false;
                 for (int g = 0; g < numGrains; ++g) {
