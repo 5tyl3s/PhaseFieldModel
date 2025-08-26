@@ -45,20 +45,14 @@ config inputConfig() {
         configOut << "  \"CoolingRateKperS\": 100,\n";
         configOut << "  \"MinimumTempK\": 300,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
-    
-        
-
         configOut << "}\n";
         configOut.close();
         std::cout << "Default Config Created. Please Edit and Rerun Program";
         newConfig.success = 0;
-
-
     }
     std::string line;
     json j;
     configIn >> j;
-
     newConfig.dx = j["dx_um"];
     newConfig.dx = newConfig.dx*1e-6;
     newConfig.dt = j["dt_s"];
@@ -126,12 +120,6 @@ config inputConfig() {
 void gridField::buildGrid(int widthSteps, int heightSteps) {
     std::cout << widthSteps << " wide " << heightSteps << " Tall" << std::endl;
     grid.resize(heightSteps,std::vector<node>(widthSteps));
-
-
- 
-  
-    
-
     for (int j = 0; j< widthSteps;j++) {
         node& gp = grid[0][j];
         gp.neighbors[0] = (j>0) ? &grid[0][j-1]:&grid[0][widthSteps-1]; //Left
@@ -140,7 +128,6 @@ void gridField::buildGrid(int widthSteps, int heightSteps) {
         gp.neighbors[3] = &grid[1][j]; //Down
         
     }
-
     for (int i = 1; i< heightSteps;i++) {
         for (int j = 0; j < widthSteps;j++) {
             node& gp = grid[i][j];
@@ -150,7 +137,6 @@ void gridField::buildGrid(int widthSteps, int heightSteps) {
             gp.neighbors[3] = (i<heightSteps-1) ? &grid[i+1][j]: nullptr; //Down
         };
     };
-
     for (int j = 0; j< widthSteps;j++) {
         node& gp = grid[heightSteps-1][j];
         gp.neighbors[0] = (j>0) ? &grid[heightSteps-1][j-1]:&grid[heightSteps-1][widthSteps-1]; //Left
@@ -159,10 +145,6 @@ void gridField::buildGrid(int widthSteps, int heightSteps) {
         gp.neighbors[3] = &bottom; //Down
         
     }
-
-
-
-
 
 };
 
@@ -187,6 +169,7 @@ void gridField::init(config modelConfig) {
             grid[ik][jk].particleComp = modelConfig.particleVolFraction; 
         };
     }
+
 }
 
 
@@ -203,14 +186,8 @@ void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
             grid[i][j].grainPhases.push_back(0.0);
         }
     }
-    
-
-
     top.grainPhases.push_back(0.0);
     bottom.grainPhases.push_back(0.0);
-    
-    double one = 1.000;
-    //std::cout << "hi";
 
     grid[nucleus[0]][nucleus[1]].grainPhases[numGrains-1] = 1;
     grid[nucleus[0]][nucleus[1]].phase = 1;
@@ -245,14 +222,33 @@ void gridField::update(
                 grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = grid[i][j].grainPhases[grid[i][j].activeGrains[g]] - (0.7e13*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]);
 
             }
+            //Check If Min temp Reached
             if (grid[i][j].temp < modelConf.minTemp) {
                 modelConf.coolingRate = 0;
             }
+            //Update Temperature from cooling
             grid[i][j].temp -= modelConf.coolingRate;
 
         }
     }
     modelConf.basePlateTemp-=modelConf.coolingRate;
+    for (int g = 0; g < numGrains; g++) {
+        for (int ag = 0; g < grainActiveNodes[g].size(); ag++) {
+
+                if (grainActiveNodes[g][ag]->grainPhases[g]>=1) {
+                    grainActiveNodes[g][ag]->grainPhases[g] = 1;
+                    grainActiveNodes[g].erase(
+                        std::remove_if(
+                            grainActiveNodes[g].begin(),
+                            grainActiveNodes[g].end(),
+                            [&](const node& n) {
+                                return n.id == grainActiveNodes[g][ag]->id; // match this grid node
+                            }
+                        ),
+                        grainActiveNodes[g].end()
+                    );
+                }
+    }
 
 
     for (int i = i_start; i < i_end; i++) {
