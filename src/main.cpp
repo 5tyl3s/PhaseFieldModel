@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <thread>
+#include <chrono>
 
 // These functions must be implemented to fill only the specified region of the output array
 void calcGrainDiffEnergyRegion(gridField& model, config& configData,
@@ -21,6 +22,7 @@ void calcTempDiffRegion(gridField& model, config& configData,
 
 int main() {
     std::cout << "PhaseField Sim Starting" << std::endl;
+    auto start = std::chrono::steady_clock::now();
     config configData = inputConfig();
     if (configData.success == 0) {
         std::cerr << "Config Failed";
@@ -111,6 +113,8 @@ int main() {
     }
     output_file3.close();
 
+    
+    std::cout << "Elapsed(ms)=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() << std::endl;
     return 0;
 }
 

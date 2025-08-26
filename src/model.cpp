@@ -259,8 +259,8 @@ void calcPhaseDiffEnergyRegion(gridField& field, config& modelConfig,
                 -2 * (1 - pha) * liq + 2 * pha * (1 - liq)
             );
             double grainSum = 0.0;
-            for (int g = 0; g < field.numGrains; g++) {
-                grainSum += field.grid[ii][jj].grainPhases[g] * field.grid[ii][jj].grainPhases[g];
+            for (int g = 0; g < field.grid[ii][jj].activeGrains.size(); g++) {
+                grainSum += field.grid[ii][jj].grainPhases[field.grid[ii][jj].activeGrains[g]] * field.grid[ii][jj].grainPhases[field.grid[ii][jj].activeGrains[g]];
             }
             eLoc += modelConfig.grainPreCo * (-2 * (1 - pha) * grainSum);
             eLoc += 2 * pha * (modelConfig.particleSlowingCoefficient * field.grid[ii][jj].particleComp);
@@ -278,13 +278,13 @@ void calcGrainDiffEnergyRegion(gridField& field, config& modelConfig,
     int i_start, int i_end, int j_start, int j_end) {
     for (int i = i_start; i < i_end; i++) {
         for (int j = j_start; j < j_end; j++) {
-            for (int g = 0; g < field.numGrains; g++) {
-                double gra = field.grid[i][j].grainPhases[g];
+            for (int g = 0; g < field.grid[i][j].activeGrains.size(); g++) {
+                double gra = field.grid[i][j].grainPhases[field.grid[i][j].activeGrains[g]];
                 double grainGrad = (
-                    field.grid[i][j].neighbors[0]->grainPhases[g] +
-                    field.grid[i][j].neighbors[1]->grainPhases[g] +
-                    field.grid[i][j].neighbors[2]->grainPhases[g] +
-                    field.grid[i][j].neighbors[3]->grainPhases[g] -
+                    field.grid[i][j].neighbors[0]->grainPhases[field.grid[i][j].activeGrains[g]] +
+                    field.grid[i][j].neighbors[1]->grainPhases[field.grid[i][j].activeGrains[g]] +
+                    field.grid[i][j].neighbors[2]->grainPhases[field.grid[i][j].activeGrains[g]] +
+                    field.grid[i][j].neighbors[3]->grainPhases[field.grid[i][j].activeGrains[g]] -
                     4 * gra
                 ) * -1 * modelConfig.grainGradCo;
 
@@ -292,14 +292,14 @@ void calcGrainDiffEnergyRegion(gridField& field, config& modelConfig,
                 double solid = 1.0 - ifLiq(field.grid[i][j].temp, modelConfig.meltTemp);
 
                 double gbEnergy = calcGrainBoundaryEnergy(field.orientations[g], {
-                    0.5 * field.grid[i][j].neighbors[0]->grainPhases[g] + 0.5 * field.grid[i][j].neighbors[1]->grainPhases[g] - field.grid[i][j].grainPhases[g],
-                    0.5 * field.grid[i][j].neighbors[2]->grainPhases[g] + 0.5 * field.grid[i][j].neighbors[3]->grainPhases[g] - field.grid[i][j].grainPhases[g],
+                    0.5 * field.grid[i][j].neighbors[0]->grainPhases[field.grid[i][j].activeGrains[g]] + 0.5 * field.grid[i][j].neighbors[1]->grainPhases[field.grid[i][j].activeGrains[g]] - field.grid[i][j].grainPhases[field.grid[i][j].activeGrains[g]],
+                    0.5 * field.grid[i][j].neighbors[2]->grainPhases[field.grid[i][j].activeGrains[g]] + 0.5 * field.grid[i][j].neighbors[3]->grainPhases[field.grid[i][j].activeGrains[g]] - field.grid[i][j].grainPhases[field.grid[i][j].activeGrains[g]],
                 });
                 grainGrad = grainGrad * gbEnergy;
 
                 double grainEnergy = modelConfig.grainPreCo * (gra * gra * gra * gra - gra + (1000 / modelConfig.cellArea) * gra * comp * gbEnergy * modelConfig.grainIntWidth + 2 * gra * solid * solid);
 
-                diffFree[i][j][g] = modelConfig.dt * (grainGrad + grainEnergy);
+                diffFree[i][j][field.grid[i][j].activeGrains[g]] = modelConfig.dt * (grainGrad + grainEnergy);
             }
         }
     }

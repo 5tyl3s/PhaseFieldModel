@@ -214,6 +214,7 @@ void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
 
     grid[nucleus[0]][nucleus[1]].grainPhases[numGrains-1] = 1;
     grid[nucleus[0]][nucleus[1]].phase = 1;
+    grid[nucleus[0]][nucleus[1]].activeGrains.push_back(numGrains-1);
     //std::cout << "hi";
     eulerAngles tempRots = {dist(gen),dist(gen),dist(gen)};
     ////std::cout << tempRots.theta1;
@@ -234,41 +235,21 @@ void gridField::update(
     std::uniform_real_distribution<> prob_dist(0.0, 1.0);
     for (int i = i_start; i < i_end; i++) {
         for (int j = j_start; j < j_end; j++) {
-            //std::cout <<"OldTemp: " << grid[i][j].temp;
-            //std::cout << "Thermal Diffusivity: " << (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity))) << std::endl;
-            //std::cout << "Keff: " << modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)) << std::endl;
-            //std::cout << modelConf.kLiquid << std::endl;
-            //std::cout << modelConf.kSolid << std::endl;
-            
-            //std::cout << "Phase: " << grid[i][j].phase << std::endl;
-            //std::cout << "GradT: " << tempGrad[i][j] << std::endl;
-            //std::cout <<" OldTemp: " << grid[i][j].temp << std::endl;
-            //std::cout <<  "DT: " << (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j]) << std::endl;
-            //std::cout << "1";
+
             grid[i][j].temp = grid[i][j].temp + (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j])/(modelConf.cellArea);
-            // std::cout << "2";
 
-            //std::cout <<" NewTemp: " << grid[i][j].temp << std::endl;
-            //std::cout << "Old Phase: " <<grid[i][j].phase;
             grid[i][j].phase -= modelConf.dt /modelConf.cellArea * phaseDiffEn[i][j];
-            //std::cout << "3";
-            //std::cout << "Help";
-            //std::cout << " New Phase: " <<grid[i][j].phase << std::endl;
-            for (int g = 0; g < numGrains; g++) {
-                //std::cout << "What";
-                //std::cout << numGrains << "Nums" << std::endl;
-                //std::cout << grainDiffEn[i][j][g] << std::endl;
-                //std::cout << "Old Grain Phase: " << grid[i][j].grainPhases[g] << std::endl;
 
-                grid[i][j].grainPhases[g] = grid[i][j].grainPhases[g] - (0.7e13*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][g]);
-                //std::cout << "New Grain Phase: " << grid[i][j].grainPhases[g] << std::endl;
+            for (int g = 0; g < grid[i][j].activeGrains.size(); g++) {
+
+                grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = grid[i][j].grainPhases[grid[i][j].activeGrains[g]] - (0.7e13*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]);
+
             }
             if (grid[i][j].temp < modelConf.minTemp) {
                 modelConf.coolingRate = 0;
             }
             grid[i][j].temp -= modelConf.coolingRate;
 
-            //std::cout << "Final Phase: " << grid[i][j].phase << std::endl;
         }
     }
     modelConf.basePlateTemp-=modelConf.coolingRate;
@@ -282,12 +263,26 @@ void gridField::update(
             if (grid[i][j].phase < 0) {
                 grid[i][j].phase = 0;
             }
-            for (int g = 0; g < numGrains; g++) {
-                if (grid[i][j].grainPhases[g] > 1) {
-                    grid[i][j].grainPhases[g] = 1;
+            for (int g = 0; g < grid[i][j].activeGrains.size(); g++) {
+                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] >= 1) {
+                    grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = 1;
                 }
-                if (grid[i][j].grainPhases[g] < 0) {
-                    grid[i][j].grainPhases[g] = 0;
+                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] < 0) {
+                    grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = 0;
+                }
+                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] > 0.1) {
+                    if (std::find(grid[i][j].neighbors[0]->activeGrains.begin(), grid[i][j].neighbors[0]->activeGrains.end(), g) != grid[i][j].neighbors[0]->activeGrains.end()) {
+                        grid[i][j].neighbors[0]->activeGrains.push_back(grid[i][j].activeGrains[g]);
+                    }
+                    if (std::find(grid[i][j].neighbors[1]->activeGrains.begin(), grid[i][j].neighbors[1]->activeGrains.end(), g) != grid[i][j].neighbors[1]->activeGrains.end()) {
+                        grid[i][j].neighbors[1]->activeGrains.push_back(grid[i][j].activeGrains[g]);
+                    }
+                    if (std::find(grid[i][j].neighbors[2]->activeGrains.begin(), grid[i][j].neighbors[2]->activeGrains.end(), g) != grid[i][j].neighbors[2]->activeGrains.end()) {
+                        grid[i][j].neighbors[2]->activeGrains.push_back(grid[i][j].activeGrains[g]);
+                    }
+                    if (std::find(grid[i][j].neighbors[3]->activeGrains.begin(), grid[i][j].neighbors[3]->activeGrains.end(), g) != grid[i][j].neighbors[3]->activeGrains.end()) {
+                        grid[i][j].neighbors[3]->activeGrains.push_back(grid[i][j].activeGrains[g]);
+                    }
                 }
             }
             if (grid[i][j].temp < (modelConf.meltTemp*modelConf.underCoolReq)) {

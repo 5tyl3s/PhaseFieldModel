@@ -54,6 +54,7 @@ struct node {
     double phase;
     double particleComp;
     std::vector<double> grainPhases;
+    std::vector<int> activeGrains;
     
     node* neighbors[4]; //x-1,x+1,y-1,y+1
 };
