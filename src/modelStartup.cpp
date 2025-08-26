@@ -192,6 +192,10 @@ void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
     grid[nucleus[0]][nucleus[1]].grainPhases[numGrains-1] = 1;
     grid[nucleus[0]][nucleus[1]].phase = 1;
     grid[nucleus[0]][nucleus[1]].activeGrains.push_back(numGrains-1);
+    grid[nucleus[0]][nucleus[1]].neighbors[0]->grainPhases.push_back(numGrains-1);
+    grid[nucleus[0]][nucleus[1]].neighbors[1]->grainPhases.push_back(numGrains-1);
+    grid[nucleus[0]][nucleus[1]].neighbors[2]->grainPhases.push_back(numGrains-1);
+    grid[nucleus[0]][nucleus[1]].neighbors[3]->grainPhases.push_back(numGrains-1);
     //std::cout << "hi";
     eulerAngles tempRots = {dist(gen),dist(gen),dist(gen)};
     ////std::cout << tempRots.theta1;
@@ -199,6 +203,11 @@ void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
     //std::cout << "Hi";
 
 }
+
+
+
+
+
 void gridField::update(
     std::vector<std::vector<double>> &phaseDiffEn,
     std::vector<std::vector<double>> &tempGrad,
@@ -215,11 +224,11 @@ void gridField::update(
 
             grid[i][j].temp = grid[i][j].temp + (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j])/(modelConf.cellArea);
 
-            grid[i][j].phase -= modelConf.dt /modelConf.cellArea * phaseDiffEn[i][j];
+            grid[i][j].phase = grid[i][j].phase - modelConf.dt /modelConf.cellArea * phaseDiffEn[i][j];
 
             for (int g = 0; g < grid[i][j].activeGrains.size(); g++) {
-
-                grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = grid[i][j].grainPhases[grid[i][j].activeGrains[g]] - (0.7e13*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]);
+                //std::cout << "Updating Grain " << grid[i][j].activeGrains[g] << " at Node (" << i << "," << j << ") With Energy:" << (0.7e11*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]) << std::endl;
+                grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = grid[i][j].grainPhases[grid[i][j].activeGrains[g]] - (0.7e11*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]);
 
             }
             //Check If Min temp Reached
@@ -232,23 +241,8 @@ void gridField::update(
         }
     }
     modelConf.basePlateTemp-=modelConf.coolingRate;
-    for (int g = 0; g < numGrains; g++) {
-        for (int ag = 0; g < grainActiveNodes[g].size(); ag++) {
 
-                if (grainActiveNodes[g][ag]->grainPhases[g]>=1) {
-                    grainActiveNodes[g][ag]->grainPhases[g] = 1;
-                    grainActiveNodes[g].erase(
-                        std::remove_if(
-                            grainActiveNodes[g].begin(),
-                            grainActiveNodes[g].end(),
-                            [&](const node& n) {
-                                return n.id == grainActiveNodes[g][ag]->id; // match this grid node
-                            }
-                        ),
-                        grainActiveNodes[g].end()
-                    );
-                }
-    }
+ 
 
 
     for (int i = i_start; i < i_end; i++) {
@@ -266,18 +260,22 @@ void gridField::update(
                 if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] < 0) {
                     grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = 0;
                 }
-                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] > 0.1) {
-                    if (std::find(grid[i][j].neighbors[0]->activeGrains.begin(), grid[i][j].neighbors[0]->activeGrains.end(), g) != grid[i][j].neighbors[0]->activeGrains.end()) {
+                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] > 0.0001) {
+                    if (std::find(grid[i][j].neighbors[0]->activeGrains.begin(), grid[i][j].neighbors[0]->activeGrains.end(), g) == grid[i][j].neighbors[0]->activeGrains.end()) {
                         grid[i][j].neighbors[0]->activeGrains.push_back(grid[i][j].activeGrains[g]);
                     }
-                    if (std::find(grid[i][j].neighbors[1]->activeGrains.begin(), grid[i][j].neighbors[1]->activeGrains.end(), g) != grid[i][j].neighbors[1]->activeGrains.end()) {
+                    if (std::find(grid[i][j].neighbors[1]->activeGrains.begin(), grid[i][j].neighbors[1]->activeGrains.end(), g) == grid[i][j].neighbors[1]->activeGrains.end()) {
                         grid[i][j].neighbors[1]->activeGrains.push_back(grid[i][j].activeGrains[g]);
                     }
-                    if (std::find(grid[i][j].neighbors[2]->activeGrains.begin(), grid[i][j].neighbors[2]->activeGrains.end(), g) != grid[i][j].neighbors[2]->activeGrains.end()) {
-                        grid[i][j].neighbors[2]->activeGrains.push_back(grid[i][j].activeGrains[g]);
+                    if (std::find(grid[i][j].neighbors[2]->activeGrains.begin(), grid[i][j].neighbors[2]->activeGrains.end(), g) == grid[i][j].neighbors[2]->activeGrains.end()) {
+                        if (grid[i][j].neighbors[2] != nullptr) {
+                            grid[i][j].neighbors[2]->activeGrains.push_back(grid[i][j].activeGrains[g]);
+                        }
                     }
-                    if (std::find(grid[i][j].neighbors[3]->activeGrains.begin(), grid[i][j].neighbors[3]->activeGrains.end(), g) != grid[i][j].neighbors[3]->activeGrains.end()) {
-                        grid[i][j].neighbors[3]->activeGrains.push_back(grid[i][j].activeGrains[g]);
+                    if (std::find(grid[i][j].neighbors[3]->activeGrains.begin(), grid[i][j].neighbors[3]->activeGrains.end(), g) == grid[i][j].neighbors[3]->activeGrains.end()) {
+                        if (grid[i][j].neighbors[3] != nullptr) {
+                            grid[i][j].neighbors[3]->activeGrains.push_back(grid[i][j].activeGrains[g]);
+                        }
                     }
                 }
             }
