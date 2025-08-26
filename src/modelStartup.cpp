@@ -300,14 +300,6 @@ void gridField::update(
 
 }
 
-void gridField::resizeGrainDiffEn(std::vector<std::vector<std::vector<double>>>& grainDiffEn, int numGrains) {
-    for (auto& row : grainDiffEn) {
-        for (auto& cell : row) {
-            if (cell.size() != numGrains)
-                cell.resize(numGrains, 0.0);
-        }
-    }
-}
 
 
 

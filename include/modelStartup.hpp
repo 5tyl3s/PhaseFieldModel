@@ -88,7 +88,15 @@ struct gridField {
         config &modelConf,
         int i_start, int i_end, int j_start, int j_end
     );
-    void resizeGrainDiffEn(std::vector<std::vector<std::vector<double>>>& grainDiffEn, int numGrains);
+    void resizeGrainDiffEn(std::vector<std::vector<std::vector<double>>>& grainDiffEn, int numGrains) {
+        for (auto& row : grainDiffEn) {
+            for (auto& cell : row) {
+                if (cell.size() != numGrains)
+                    cell.resize(numGrains, 0.0);
+            }
+        }
+    };
+    
 };
 
 
