@@ -68,9 +68,11 @@ int main() {
         for (auto& thread : threads) {
             thread.join();
         }
+        //std::cout << "Threads Joined" << std::endl;
 
         // Update the entire grid in a single call
         model.update(phaseDiffEn, tempGrad, grainDiffEn, configData, 0, configData.steps[0], 0, configData.steps[1]);
+       // std::cout<<"Grid Updated"<<std::endl;
         model.resizeGrainDiffEn(grainDiffEn, model.numGrains);
     }
 
