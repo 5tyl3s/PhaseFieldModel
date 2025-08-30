@@ -1,6 +1,7 @@
 #include <iostream>
 #include "model.hpp"
 #include "modelStartup.hpp"
+
 #include <fstream>
 #include <vector>
 #include <string>
@@ -36,26 +37,26 @@ int main() {
     std::vector<std::vector<double>> tempGrad(configData.steps[0],std::vector<double>(configData.steps[1]));
 
     // Calculate section sizes for 4x4 grid
-    int i_eighth = configData.steps[0] / 4;
-    int j_eighth = configData.steps[1] / 4;
+    int i_eighth = configData.steps[0] / 8;
+    int j_eighth = configData.steps[1] / 8;
 
     for (int t = 0; t < configData.timeSteps; t++) {
-        std::cout << t << "/" << configData.timeSteps << std::endl;
+        if (t%100 == 0) std::cout << t << "/" << configData.timeSteps << std::endl;
         std::vector<std::thread> threads;
 
         // Create 16 threads in a 4x4 grid
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
                 int i_start = i * i_eighth;
-                int i_end = (i == 3) ? configData.steps[0] : (i + 1) * i_eighth;
+                int i_end = (i == 7) ? configData.steps[0] : (i + 1) * i_eighth;
                 int j_start = j * j_eighth;
-                int j_end = (j == 3) ? configData.steps[1] : (j + 1) * j_eighth;
+                int j_end = (j == 7) ? configData.steps[1] : (j + 1) * j_eighth;
 
                 // Launch phase and temp calculations
                 threads.push_back(std::thread([&, i_start, i_end, j_start, j_end]() {
                     calcPhaseDiffEnergyRegion(model, configData, phaseDiffEn, i_start, i_end, j_start, j_end);
-                    calcTempDiffRegion(model, configData, tempGrad, i_start, i_end, j_start, j_end);
                 }));
+
 
                 // Launch grain calculations
                 threads.push_back(std::thread([&, i_start, i_end, j_start, j_end]() {
@@ -63,6 +64,10 @@ int main() {
                 }));
             }
         }
+        // Launch temperature calculation in main thread
+        threads.push_back(std::thread([&]() {
+            tempGrad = updateTemp(configData.tGrad, configData.coolingRate, t, configData.dx, configData.dt, configData.steps[0], configData.steps[1], configData.startTemp,  configData.minTemp);
+        }));
 
         // Join all threads
         for (auto& thread : threads) {
@@ -104,15 +109,25 @@ int main() {
 
     std::string fileNameGrain = "GrainGrid";
     std::ofstream output_file3(fileNameGrain);
-    for (int g = 0; g < model.numGrains;g++) {
-        for (int i=0;i < configData.steps[0];i++) {
-            for (int j=0;j < configData.steps[1];j++) { 
-                output_file3 << model.grid[i][j].grainPhases[g] << ',';
+    double tempOut = 0;
+    int gNum;
+    
+    for (int i=0;i < configData.steps[0];i++) {
+        for (int j=0;j < configData.steps[1];j++) { 
+            gNum = 0;
+            tempOut = 0;
+            for (int g = 0; g < model.grid[i][j].activeGrains.size(); g++) {
+                if (model.grid[i][j].grainPhases[model.grid[i][j].activeGrains[g]] > tempOut) {
+                    tempOut = model.grid[i][j].grainPhases[model.grid[i][j].activeGrains[g]];
+                    gNum = model.grid[i][j].activeGrains[g];
+                }
+                
             }
-            output_file3 << std::endl;
+            output_file3 << gNum << ',';
         }
-        output_file3 << std::endl << std::endl;
+        output_file3 << std::endl;        
     }
+
     output_file3.close();
 
     

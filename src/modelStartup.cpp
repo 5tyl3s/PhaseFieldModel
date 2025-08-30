@@ -42,9 +42,11 @@ config inputConfig() {
         configOut << "  \"HomogeneousNucleationCoefficient\": 100,\n";
         configOut << "  \"TimeSteps\": 10000,\n";
         configOut << "  \"UndercoolingRequirement\": 0.95,\n";
-        configOut << "  \"CoolingRateKperS\": 100,\n";
+        configOut << "  \"CoolingRatempers\": 100,\n";
         configOut << "  \"MinimumTempK\": 300,\n";
+        configOut << "  \"tempGradKperm\": 1.0,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
+
         configOut << "}\n";
         configOut.close();
         std::cout << "Default Config Created. Please Edit and Rerun Program";
@@ -90,8 +92,10 @@ config inputConfig() {
     newConfig.grainGradCo = 0.5*newConfig.grainIntWidth;
     newConfig.homoNucCoeff =j["HomogeneousNucleationCoefficient"];
     newConfig.underCoolReq = j["UndercoolingRequirement"];
-    newConfig.coolingRate = j["CoolingRateKperS"];
-    newConfig.coolingRate = newConfig.coolingRate * newConfig.dt;
+    newConfig.coolingRate = j["CoolingRatempers"];
+    std::cout << newConfig.coolingRate << std::endl;
+    newConfig.tGrad = j["tempGradKperm"];
+    newConfig.coolingRate =j["CoolingRatempers"];
     newConfig.minTemp = j["MinimumTempK"];
 
     std::cout << "The Step Size is " << newConfig.dx << std::endl;
@@ -196,6 +200,11 @@ void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
     grid[nucleus[0]][nucleus[1]].neighbors[1]->grainPhases.push_back(numGrains-1);
     grid[nucleus[0]][nucleus[1]].neighbors[2]->grainPhases.push_back(numGrains-1);
     grid[nucleus[0]][nucleus[1]].neighbors[3]->grainPhases.push_back(numGrains-1);
+    grid[nucleus[0]+1][nucleus[1]+1].grainPhases.push_back(numGrains-1);
+    grid[nucleus[0]+1][nucleus[1]-1].grainPhases.push_back(numGrains-1);
+    grid[nucleus[0]-1][nucleus[1]+1].grainPhases.push_back(numGrains-1);
+    grid[nucleus[0]-1][nucleus[1]-1].grainPhases.push_back(numGrains-1);
+
     //std::cout << "hi";
     eulerAngles tempRots = {dist(gen),dist(gen),dist(gen)};
     ////std::cout << tempRots.theta1;
@@ -223,21 +232,15 @@ void gridField::update(
     for (int i = i_start; i < i_end; i++) {
         for (int j = j_start; j < j_end; j++) {
 
-            grid[i][j].temp = grid[i][j].temp + (((modelConf.kLiquid+(grid[i][j].phase*(modelConf.kSolid-modelConf.kLiquid)))/(modelConf.density*modelConf.heatCapacity)))*modelConf.dt*(tempGrad[i][j])/(modelConf.cellArea);
-
+            grid[i][j].temp = tempGrad[i][j];
             grid[i][j].phase = grid[i][j].phase - modelConf.dt /modelConf.cellArea * phaseDiffEn[i][j];
 
             for (int g = 0; g < grid[i][j].activeGrains.size(); g++) {
                 //std::cout << "Updating Grain " << grid[i][j].activeGrains[g] << " at Node (" << i << "," << j << ") With Energy:" << (0.7e11*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]) << std::endl;
-                grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = grid[i][j].grainPhases[grid[i][j].activeGrains[g]] - (0.7e17*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]);
+                grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = grid[i][j].grainPhases[grid[i][j].activeGrains[g]] - (4e6*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]);
 
             }
-            //Check If Min temp Reached
-            if (grid[i][j].temp < modelConf.minTemp) {
-                modelConf.coolingRate = 0;
-            }
-            //Update Temperature from cooling
-            grid[i][j].temp -= modelConf.coolingRate;
+
 
         }
     }
@@ -263,7 +266,7 @@ void gridField::update(
                 if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] < 0) {
                     grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = 0;
                 }
-                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] > 0.25) {
+                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] > 0) {
                     if (grid[i][j].neighbors[0] != nullptr) {
                         flip = 0;
                         for (int rg = 0; rg < grid[i][j].neighbors[0]->activeGrains.size(); rg++) {
@@ -320,16 +323,17 @@ void gridField::update(
 
 
 
-
-            if (grid[i][j].temp < (modelConf.meltTemp*modelConf.underCoolReq)) {
-                bool grainExists = false;
-                if (grid[i][j].activeGrains.size() > 0||grid[i][j].phase > 0.1||grid[i][j].neighbors[0]->activeGrains.size()>0||grid[i][j].neighbors[1]->activeGrains.size()>0||grid[i][j].neighbors[2]->activeGrains.size()>0||grid[i][j].neighbors[3]->activeGrains.size()>0) {
-                    grainExists = true;
-                }
-                // 0.01% chance of nucleation
-                if (!grainExists && prob_dist(gen) <(modelConf.dt*modelConf.dx*modelConf.dx*modelConf.homoNucCoeff)) {
-                    std::lock_guard<std::mutex> lock(grain_mutex);
-                    addGrain({i,j},modelConf);
+            if (i > 0 && i < modelConf.steps[0]-1 && j > 0 && j < modelConf.steps[1]-1) {
+                if (grid[i][j].temp < (modelConf.meltTemp*modelConf.underCoolReq)) {
+                    bool grainExists = false;
+                    if (grid[i][j].activeGrains.size() > 0||grid[i][j].phase >0.005||grid[i][j].neighbors[0]->activeGrains.size()>0||grid[i][j].neighbors[1]->activeGrains.size()>0||grid[i][j].neighbors[2]->activeGrains.size()>0||grid[i][j].neighbors[3]->activeGrains.size()>0||grid[i+1][j+1].activeGrains.size()>0||grid[i+1][j-1].activeGrains.size()>0||grid[i-1][j+1].activeGrains.size()>0||grid[i-1][j-1].activeGrains.size()>0) {
+                        grainExists = true;
+                    }
+                    // 0.01% chance of nucleation
+                    if (!grainExists && prob_dist(gen) <(modelConf.dt*modelConf.dx*modelConf.dx*modelConf.homoNucCoeff)) {
+                        std::lock_guard<std::mutex> lock(grain_mutex);
+                        addGrain({i,j},modelConf);
+                    }
                 }
             }
         }
@@ -340,3 +344,29 @@ void gridField::update(
 
 
 
+std::vector<std::vector<double>> updateTemp(double tGrad, double tRate, int timeStep, double dx, double dt, int iSteps, int jSteps, double startTemp, double minTemp) {
+    //std::cout << timeStep << std::endl;
+    //std::cout << startTemp << std::endl;
+    double tempGrad = tGrad;
+    double cRate = tRate;
+    //std::cout << "Cooling Rate: " << cRate << std::endl;
+    std::vector<std::vector<double>> newTemp(iSteps, std::vector<double>(jSteps));
+    double startH = cRate*timeStep*dt;
+    //std::cout << "Start Height: " << startH << std::endl;
+   // std::cout << startH << std::endl;
+    for (int i = 0; i < iSteps; i++) {
+
+        for (int j = 0; j < jSteps; j++) {
+            double height = i * dx;
+            if (height > startH) {
+                newTemp[i][j] = startTemp;
+            } else {
+                double tempDrop = tempGrad * (startH-height);
+                //std::cout << tempDrop << std::endl;
+                if (startTemp-tempDrop > minTemp) newTemp[i][j] = startTemp - tempDrop; else newTemp[i][j] = minTemp;
+                //  std::cout << newTemp[i][j] << std::endl;
+            };
+        }
+    }
+    return newTemp;
+}

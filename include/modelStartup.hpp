@@ -5,6 +5,7 @@
 
 
 
+
 struct config {
 
     double meltTemp; //K
@@ -38,8 +39,9 @@ struct config {
     double density;
     double grainGradCo;
     double homoNucCoeff;
-    double coolingRate; //K/s
     double minTemp;
+    double tGrad;
+    double coolingRate;
 
 };
 
@@ -102,4 +104,5 @@ struct gridField {
 
 
 
+std::vector<std::vector<double>> updateTemp(double tGrad, double tRate, int timeStep, double dx, double dt, int iSteps, int jSteps, double startTemp, double minTemp);
 
