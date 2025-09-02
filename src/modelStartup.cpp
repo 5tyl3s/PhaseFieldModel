@@ -45,6 +45,9 @@ config inputConfig() {
         configOut << "  \"CoolingRatempers\": 100,\n";
         configOut << "  \"MinimumTempK\": 300,\n";
         configOut << "  \"tempGradKperm\": 1.0,\n";
+        configOut << "  \"molarMass\": 95.95,\n";
+        configOut << "  \"drivingForceSlopek\": 0.0138,\n";
+        configOut << "  \"drivingForceIntercept\": 39.842,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
 
         configOut << "}\n";
@@ -97,6 +100,12 @@ config inputConfig() {
     newConfig.tGrad = j["tempGradKperm"];
     newConfig.coolingRate =j["CoolingRatempers"];
     newConfig.minTemp = j["MinimumTempK"];
+    newConfig.drivingForceSlopek = j["drivingForceSlopek"];
+    newConfig.drivingForceIntercept = j["drivingForceIntercept"];
+    newConfig.molarMass = j["molarMass"];
+
+
+    newConfig.molarVolume = newConfig.molarMass / newConfig.density;
 
     std::cout << "The Step Size is " << newConfig.dx << std::endl;
     int height = static_cast<int>(std::ceil(newConfig.cellHeight / newConfig.dx));
@@ -237,7 +246,7 @@ void gridField::update(
 
             for (int g = 0; g < grid[i][j].activeGrains.size(); g++) {
                 //std::cout << "Updating Grain " << grid[i][j].activeGrains[g] << " at Node (" << i << "," << j << ") With Energy:" << (0.7e11*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]) << std::endl;
-                grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = grid[i][j].grainPhases[grid[i][j].activeGrains[g]] - (4e6*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]);
+                grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = grid[i][j].grainPhases[grid[i][j].activeGrains[g]] - (4e7*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]);
 
             }
 
@@ -330,7 +339,7 @@ void gridField::update(
                         grainExists = true;
                     }
                     // 0.01% chance of nucleation
-                    if (!grainExists && prob_dist(gen) <(modelConf.dt*modelConf.dx*modelConf.dx*modelConf.homoNucCoeff)) {
+                    if (!grainExists && prob_dist(gen) <(1-exp(modelConf.dx*modelConf.dx*modelConf.dt*grid[i][j].calcNucRate())))) {
                         std::lock_guard<std::mutex> lock(grain_mutex);
                         addGrain({i,j},modelConf);
                     }
@@ -369,4 +378,19 @@ std::vector<std::vector<double>> updateTemp(double tGrad, double tRate, int time
         }
     }
     return newTemp;
+}
+
+
+float node::calcNucRate(config modelConf) {
+    double dForceMo = modelConf.drivingForceSlopek * temp + modelConf.drivingForceIntercept;
+    //boltzman constant
+    double k= 1.380649e-23;
+    // planck constant
+    double h = 6.62607015e-34;
+    //Number atoms in cell
+    double avogadro = 6.02214076e23;
+    // (m^3/mol)^(2/3) * (#atoms/mol)
+    double numAtoms = modelConf.cellArea*avogadro/(pow(modelConf.molarVolume, 2.0/3.0) * pow(avogadro, 1.0/3.0));
+
+    return dForceMo;
 }

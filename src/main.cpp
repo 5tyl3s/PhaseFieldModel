@@ -81,33 +81,39 @@ int main() {
         model.resizeGrainDiffEn(grainDiffEn, model.numGrains);
     }
 
-    std::string fileNameTemp = "TempGrid";
+    std::string fileNameTemp = "TempGrid.csv";
     std::ofstream output_file1(fileNameTemp);
     if (!output_file1.is_open()) {
         std::cerr << "Error: Could not open file " << fileNameTemp << std::endl;
     }
     for (int i=0;i < configData.steps[0];i++) {
         for (int j=0;j < configData.steps[1];j++) {
-            output_file1 << model.grid[i][j].temp << ',';
+            output_file1 << model.grid[i][j].temp;
+            if (j < configData.steps[1] - 1) {
+                output_file1 << ',';
+            }
         }
         output_file1 << std::endl;
     }
     output_file1.close();
-    std::string fileNamePhase = "PhaseGrid";
+    std::string fileNamePhase = "PhaseGrid.csv";
     std::ofstream output_file2(fileNamePhase);
     if (!output_file2.is_open()) {
         std::cerr << "Error: Could not open file " << fileNamePhase << std::endl;
     }
     for (int i=0;i < configData.steps[0];i++) {
         for (int j=0;j < configData.steps[1];j++) {
-            output_file2 << model.grid[i][j].phase << ',';
+            output_file2  << model.grid[i][j].phase;
+            if (j < configData.steps[1] - 1) {
+                output_file2  << ',';
+            }
         }
         output_file2  << std::endl;
     }
     std::cout << "Calc Completed, Saved Data";
     output_file2.close();
 
-    std::string fileNameGrain = "GrainGrid";
+    std::string fileNameGrain = "GrainGrid.csv";
     std::ofstream output_file3(fileNameGrain);
     double tempOut = 0;
     int gNum;
@@ -119,11 +125,15 @@ int main() {
             for (int g = 0; g < model.grid[i][j].activeGrains.size(); g++) {
                 if (model.grid[i][j].grainPhases[model.grid[i][j].activeGrains[g]] > tempOut) {
                     tempOut = model.grid[i][j].grainPhases[model.grid[i][j].activeGrains[g]];
-                    gNum = model.grid[i][j].activeGrains[g];
+                    gNum = model.grid[i][j].activeGrains[g]+1;
                 }
                 
             }
-            output_file3 << gNum << ',';
+            output_file3 << gNum;
+            if (j < configData.steps[1] - 1) {
+                output_file3 << ',';
+            }
+            
         }
         output_file3 << std::endl;        
     }

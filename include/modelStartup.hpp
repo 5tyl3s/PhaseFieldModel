@@ -42,6 +42,10 @@ struct config {
     double minTemp;
     double tGrad;
     double coolingRate;
+    double drivingForceSlopek;
+    double drivingForceIntercept;
+    double molarMass;
+    double molarVolume;
 
 };
 
@@ -60,6 +64,8 @@ struct node {
     std::vector<int> activeGrains;
     
     node* neighbors[4]; //x-1,x+1,y-1,y+1
+    float calcNucRate(config modelConf);
+    
 };
 
 struct eulerAngles {
