@@ -21,6 +21,8 @@ void calcTempDiffRegion(gridField& model, config& configData,
     std::vector<std::vector<double>>& tempGrad,
     int i_start, int i_end, int j_start, int j_end);
 
+void calcParticleCompDiffRegion(gridField& model, config& configData,std::vector<std::vector<double>>& tempPartComp,int i_start, int i_end, int j_start, int j_end);
+
 int main() {
     std::cout << "PhaseField Sim Starting" << std::endl;
     auto start = std::chrono::steady_clock::now();
@@ -35,7 +37,7 @@ int main() {
     std::vector<std::vector<std::vector<double>>> grainDiffEn(configData.steps[0],std::vector<std::vector<double>>(configData.steps[1],std::vector<double>(model.numGrains)));
     std::vector<std::vector<double>> phaseDiffEn(configData.steps[0],std::vector<double>(configData.steps[1]));
     std::vector<std::vector<double>> tempGrad(configData.steps[0],std::vector<double>(configData.steps[1]));
-
+    std::vector<std::vector<double>> tempPartComp(configData.steps[0],std::vector<double>(configData.steps[1]));
     // Calculate section sizes for 4x4 grid
     int i_eighth = configData.steps[0] / 8;
     int j_eighth = configData.steps[1] / 8;
@@ -62,6 +64,9 @@ int main() {
                 threads.push_back(std::thread([&, i_start, i_end, j_start, j_end]() {
                     calcGrainDiffEnergyRegion(model, configData, grainDiffEn, i_start, i_end, j_start, j_end);
                 }));
+                threads.push_back(std::thread([&, i_start, i_end, j_start, j_end]() {
+                    calcParticleCompDiffRegion(model, configData, tempPartComp,  i_start, i_end, j_start, j_end);
+                }));
             }
         }
         // Launch temperature calculation in main thread
@@ -76,7 +81,7 @@ int main() {
         //std::cout << "Threads Joined" << std::endl;
 
         // Update the entire grid in a single call
-        model.update(phaseDiffEn, tempGrad, grainDiffEn, configData, 0, configData.steps[0], 0, configData.steps[1]);
+        model.update(phaseDiffEn, tempGrad, grainDiffEn, tempPartComp, configData, 0, configData.steps[0], 0, configData.steps[1]);
        // std::cout<<"Grid Updated"<<std::endl;
         model.resizeGrainDiffEn(grainDiffEn, model.numGrains);
     }
@@ -139,6 +144,24 @@ int main() {
     }
 
     output_file3.close();
+
+
+    std::string fileNamePart = "ParticleGrid.csv";
+    std::ofstream output_file4(fileNamePart);
+    if (!output_file4.is_open()) {
+        std::cerr << "Error: Could not open file " << fileNamePart << std::endl;
+    }
+    for (int i=0;i < configData.steps[0];i++) {
+        for (int j=0;j < configData.steps[1];j++) {
+            output_file4  << model.grid[i][j].particleComp;
+            if (j < configData.steps[1] - 1) {
+                output_file4  << ',';
+            }
+        }
+        output_file4  << std::endl;
+    }
+    std::cout << "Calc Completed, Saved Data";
+    output_file4   .close();
 
     
     std::cout << "Elapsed(ms)=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() << std::endl;

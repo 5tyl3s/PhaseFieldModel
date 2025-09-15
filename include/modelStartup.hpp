@@ -46,6 +46,8 @@ struct config {
     double drivingForceIntercept;
     double molarMass;
     double molarVolume;
+    double diffusionActivationEnergy;
+    double particleSolidIntEnergy;
 
 };
 
@@ -93,6 +95,7 @@ struct gridField {
         std::vector<std::vector<double>> &phaseDiffEn,
         std::vector<std::vector<double>> &tempGrad,
         std::vector<std::vector<std::vector<double>>> &grainDiffEn,
+        std::vector<std::vector<double>> &tempPartComp,
         config &modelConf,
         int i_start, int i_end, int j_start, int j_end
     );

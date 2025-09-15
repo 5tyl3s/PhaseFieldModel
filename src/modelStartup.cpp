@@ -6,6 +6,7 @@
 #include <random>
 #include <cmath>
 #include "json.hpp" 
+#include <iomanip>
 using json = nlohmann::json;
 #include <mutex>
 static std::mutex grain_mutex;
@@ -48,6 +49,8 @@ config inputConfig() {
         configOut << "  \"molarMass\": 95.95,\n";
         configOut << "  \"drivingForceSlopek\": 0.0138,\n";
         configOut << "  \"drivingForceIntercept\": 39.842,\n";
+        configOut << "  \"diffusionActivationEnergy\": 1.5,\n";
+        configOut << "  \"ParticleSolidIntEnergy\": 6.0,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
 
         configOut << "}\n";
@@ -102,10 +105,12 @@ config inputConfig() {
     newConfig.minTemp = j["MinimumTempK"];
     newConfig.drivingForceSlopek = j["drivingForceSlopek"];
     newConfig.drivingForceIntercept = j["drivingForceIntercept"];
+    newConfig.diffusionActivationEnergy = j["diffusionActivationEnergy"];
     newConfig.molarMass = j["molarMass"];
+    newConfig.particleSolidIntEnergy = j["particleSolidIntEnergy"];
 
 
-    newConfig.molarVolume = newConfig.molarMass / newConfig.density;
+    newConfig.molarVolume = (newConfig.molarMass) / (newConfig.density*1000);
 
     std::cout << "The Step Size is " << newConfig.dx << std::endl;
     int height = static_cast<int>(std::ceil(newConfig.cellHeight / newConfig.dx));
@@ -230,6 +235,7 @@ void gridField::update(
     std::vector<std::vector<double>> &phaseDiffEn,
     std::vector<std::vector<double>> &tempGrad,
     std::vector<std::vector<std::vector<double>>> &grainDiffEn,
+    std::vector<std::vector<double>> &tempPartComp,
     config &modelConf,
     int i_start, int i_end, int j_start, int j_end
 ) {
@@ -243,10 +249,11 @@ void gridField::update(
 
             grid[i][j].temp = tempGrad[i][j];
             grid[i][j].phase = grid[i][j].phase - modelConf.dt /modelConf.cellArea * phaseDiffEn[i][j];
+            grid[i][j].particleComp = grid[i][j].particleComp - ((1/modelConf.cellArea)*modelConf.dt*(1-grid[i][j].phase)*tempPartComp[i][j]);
 
             for (int g = 0; g < grid[i][j].activeGrains.size(); g++) {
                 //std::cout << "Updating Grain " << grid[i][j].activeGrains[g] << " at Node (" << i << "," << j << ") With Energy:" << (0.7e11*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]) << std::endl;
-                grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = grid[i][j].grainPhases[grid[i][j].activeGrains[g]] - (4e7*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]);
+                grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = grid[i][j].grainPhases[grid[i][j].activeGrains[g]] - (1e15*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]);
 
             }
 
@@ -275,7 +282,7 @@ void gridField::update(
                 if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] < 0) {
                     grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = 0;
                 }
-                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] > 0) {
+                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] > 0.000000001) {
                     if (grid[i][j].neighbors[0] != nullptr) {
                         flip = 0;
                         for (int rg = 0; rg < grid[i][j].neighbors[0]->activeGrains.size(); rg++) {
@@ -333,13 +340,13 @@ void gridField::update(
 
 
             if (i > 0 && i < modelConf.steps[0]-1 && j > 0 && j < modelConf.steps[1]-1) {
-                if (grid[i][j].temp < (modelConf.meltTemp*modelConf.underCoolReq)) {
+                if (grid[i][j].temp < (modelConf.meltTemp)) {
                     bool grainExists = false;
-                    if (grid[i][j].activeGrains.size() > 0||grid[i][j].phase >0.005||grid[i][j].neighbors[0]->activeGrains.size()>0||grid[i][j].neighbors[1]->activeGrains.size()>0||grid[i][j].neighbors[2]->activeGrains.size()>0||grid[i][j].neighbors[3]->activeGrains.size()>0||grid[i+1][j+1].activeGrains.size()>0||grid[i+1][j-1].activeGrains.size()>0||grid[i-1][j+1].activeGrains.size()>0||grid[i-1][j-1].activeGrains.size()>0) {
+                    if (grid[i][j].activeGrains.size() > 0||grid[i][j].phase >0.0001||grid[i][j].neighbors[0]->activeGrains.size()>0||grid[i][j].neighbors[1]->activeGrains.size()>0||grid[i][j].neighbors[2]->activeGrains.size()>0||grid[i][j].neighbors[3]->activeGrains.size()>0||grid[i+1][j+1].activeGrains.size()>0||grid[i+1][j-1].activeGrains.size()>0||grid[i-1][j+1].activeGrains.size()>0||grid[i-1][j-1].activeGrains.size()>0) {
                         grainExists = true;
                     }
                     // 0.01% chance of nucleation
-                    if (!grainExists && prob_dist(gen) <(1-exp(modelConf.dx*modelConf.dx*modelConf.dt*grid[i][j].calcNucRate())))) {
+                    if (!grainExists && prob_dist(gen) <(1-exp(modelConf.dx*modelConf.dx*modelConf.dt*grid[i][j].calcNucRate(modelConf)*-1))) { 
                         std::lock_guard<std::mutex> lock(grain_mutex);
                         addGrain({i,j},modelConf);
                     }
@@ -383,14 +390,32 @@ std::vector<std::vector<double>> updateTemp(double tGrad, double tRate, int time
 
 float node::calcNucRate(config modelConf) {
     double dForceMo = modelConf.drivingForceSlopek * temp + modelConf.drivingForceIntercept;
+    // kJ/mol
+    dForceMo = 1000*dForceMo / modelConf.molarVolume;
+    // J/m^3
     //boltzman constant
-    double k= 1.380649e-23;
-    // planck constant
-    double h = 6.62607015e-34;
-    //Number atoms in cell
-    double avogadro = 6.02214076e23;
-    // (m^3/mol)^(2/3) * (#atoms/mol)
-    double numAtoms = modelConf.cellArea*avogadro/(pow(modelConf.molarVolume, 2.0/3.0) * pow(avogadro, 1.0/3.0));
+    //std::cout << "Driving Force: " << dForceMo << std::endl;
 
-    return dForceMo;
+    double k= 1.380649e-23; // m^2kg/(s^2K)
+    // planck constant
+    double h = 6.62607015e-34; // m^2kg/s
+    //Number atoms in cell
+    double avogadro = 6.02214076e23; // #atoms/mole
+    // (m^3/mol)^(2/3) * (#atoms/mol)^(1/3)
+    double numAtoms = modelConf.cellArea*avogadro/(pow(modelConf.molarVolume, 2.0/3.0) * pow(avogadro, 1.0/3.0));
+    //std::cout << "Number of Atoms in Cell: " << numAtoms << std::endl;
+    //std::cout << "LiqSolIntE: " << modelConf.liqSolIntE << std::endl;
+    double freeEnergyNucleusFormation = (16*3.14159*pow(modelConf.liqSolIntE,3)/(3*(dForceMo*dForceMo)));
+    // 16*pi*<liqSolIntE^3>/(3*(dForceMo^2)) = (J/m^2)^3 / (J/m^3)^2 = J
+    //
+    //std::cout << "Free Energy of Nucleus Formation at Temp " << temp << " is " << freeEnergyNucleusFormation << std::endl;
+    long double inner = freeEnergyNucleusFormation/(k*temp);
+    // J / (m^2kg/(s^2K) * K) = J/(m^2kg/(s^2)) = (kg*m^2/s^2)/(m^2kg/s^2) = unitless
+
+    //std::cout << "Inner Exponential Term: " << std::setprecision(10) << inner << std::endl;
+    long double nucleationRate = (k*temp*numAtoms/h)*exp(-1*modelConf.diffusionActivationEnergy/(8.314*temp))*exp(inner);
+    //std::cout << "First Term: "<< (k*temp*numAtoms/h) << std::endl << "Second Term: " << exp(-1*modelConf.diffusionActivationEnergy/(8.314*temp)) << std::endl << "ThirdTerm: " << exp(-1*inner) << std::endl;
+   // std::cout << "Nucleation Rate at Temp " << temp << " is " << nucleationRate << std::endl << std::endl;
+
+    return nucleationRate;
 }

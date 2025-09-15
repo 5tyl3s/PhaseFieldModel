@@ -153,12 +153,12 @@ void calcPhaseDiffEnergyRegion(gridField& field, config& modelConfig,
             
             
             eLoc += modelConfig.grainPreCo * (-2 * (1 - pha) * grainSum);
-            eLoc += 2 * pha * (modelConfig.particleSlowingCoefficient * field.grid[ii][jj].particleComp);
+            
             eGrad = (field.grid[ii][jj].neighbors[0]->phase +
                      field.grid[ii][jj].neighbors[1]->phase +
                      field.grid[ii][jj].neighbors[2]->phase +
                      field.grid[ii][jj].neighbors[3]->phase - 4 * pha) * modelConfig.phaseGradCo;
-            diffFree[ii][jj] = eLoc + eGrad;
+            diffFree[ii][jj] = eLoc + eGrad + field.grid[ii][jj].particleComp*field.grid[ii][jj].particleComp*2*field.grid[ii][jj].phase*modelConfig.particleSolidIntEnergy; ;
             //std::cout << "Phase Energy at (" << ii << "," << jj << "): " << diffFree[ii][jj] << " From Grad: " << eGrad << std::endl;
         }
     }
@@ -236,6 +236,112 @@ void calcTempDiffRegion(gridField& field, config& modelConfig,
     }
 }
 
+void calcParticleCompDiffRegion(gridField& field, config& modelConfig,
+    std::vector<std::vector<double>>& tempPartComp,
+    int i_start, int i_end, int j_start, int j_end) {
+    
+    for (int i = i_start; i < i_end; i++) {
+        for (int j = j_start; j < j_end; j++) {
+            // Calculate Laplacian of particleComp first
+            double particleCompLaplacian;
+            if (i == 0) {
+                // Fixed top boundary condition - only use side and bottom neighbors
+                particleCompLaplacian = ((1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[1]->particleComp +  // right
+                                       (1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[0]->particleComp +  // left
+                                       (1-field.grid[i][j].neighbors[2]->phase)*field.grid[i][j].neighbors[2]->particleComp -  // bottom
+                                       ((1-field.grid[i][j].phase) * 3 * field.grid[i][j].particleComp));
+            }
+            else if (i == modelConfig.steps[0] - 1) {
+                particleCompLaplacian = ((1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[0]->particleComp +
+                                       (1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[1]->particleComp +
+                                       (1-field.grid[i][j].neighbors[2]->phase)*field.grid[i][j].neighbors[2]->particleComp -
+                                       (3*(1-field.grid[i][j].phase)*field.grid[i][j].particleComp));
+            }
+            else {
+                particleCompLaplacian = ((1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[0]->particleComp +
+                                       (1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[1]->particleComp +
+                                       (1-field.grid[i][j].neighbors[2]->phase)*field.grid[i][j].neighbors[2]->particleComp +
+                                       (1-field.grid[i][j].neighbors[3]->phase)*field.grid[i][j].neighbors[3]->particleComp -
+                                       (4*(1-field.grid[i][j].phase)*field.grid[i][j].particleComp));
+            }
+
+            // Calculate potential at current point
+            double currentPotential =modelConfig.particleSolidIntEnergy * 
+                                    field.grid[i][j].phase *
+                                    field.grid[i][j].particleComp *
+                                    particleCompLaplacian;
+
+            // Calculate Laplacian of potentials
+            if (i == 0) {
+                tempPartComp[i][j] = (
+                    getPotentialWithLaplacian(field, modelConfig, i, j-1) +
+                    getPotentialWithLaplacian(field, modelConfig, i, j+1) +
+                    getPotentialWithLaplacian(field, modelConfig, i+1, j) -
+                    (3 * currentPotential)
+                ) / (modelConfig.dx * modelConfig.dx);
+            }
+            else if (i == modelConfig.steps[0] - 1) {
+                tempPartComp[i][j] = (
+                    getPotentialWithLaplacian(field, modelConfig, i-1, j) +
+                    getPotentialWithLaplacian(field, modelConfig, i, j-1) +
+                    getPotentialWithLaplacian(field, modelConfig, i, j+1) -
+                    (3 * currentPotential)
+                ) / (modelConfig.dx * modelConfig.dx);
+            }
+            else {
+                tempPartComp[i][j] = (
+                    getPotentialWithLaplacian(field, modelConfig, i-1, j) +
+                    getPotentialWithLaplacian(field, modelConfig, i+1, j) +
+                    getPotentialWithLaplacian(field, modelConfig, i, j-1) +
+                    getPotentialWithLaplacian(field, modelConfig, i, j+1) -
+                    (4 * currentPotential)
+                ) / (modelConfig.dx * modelConfig.dx);
+            }
+            tempPartComp[i][j] = particleCompLaplacian;
+            //std::cout << "Particle Comp Energy at (" << i << "," << j << "): " << tempPartComp[i][j] << std::endl;
+        }
+    }
+    
+}
+
+// Helper function to calculate potential with Laplacian at a given point
+inline double getPotentialWithLaplacian(gridField& field, config& modelConfig, int i, int j) {
+    // Handle periodic boundary conditions for j
+    if (j < 0) j = modelConfig.steps[1] - 1;
+    if (j >= modelConfig.steps[1]) j = 0;
+    
+    // Calculate Laplacian of particleComp at this point
+    double particleCompLaplacian;
+    if (i == 0) {
+        // Fixed top boundary - only use side and bottom neighbors
+        particleCompLaplacian = (1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[1]->particleComp +  // right
+                                (1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[0]->particleComp +  // left
+                                (1-field.grid[i][j].neighbors[3]->phase)*field.grid[i][j].neighbors[2]->particleComp -  // bottom
+                                (3*(1-field.grid[i][j].phase)*field.grid[i][j].particleComp);
+    }
+    else if (i == modelConfig.steps[0] - 1) {
+        // Bottom boundary remains the same
+            particleCompLaplacian = ((1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[0]->particleComp +
+                                    (1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[1]->particleComp +
+                                    (1-field.grid[i][j].neighbors[2]->phase)*field.grid[i][j].neighbors[2]->particleComp -
+                                    (3*(1-field.grid[i][j].phase)*field.grid[i][j].particleComp));
+        }
+    else {
+        particleCompLaplacian = ((1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[0]->particleComp +
+                                (1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[1]->particleComp +
+                                (1-field.grid[i][j].neighbors[2]->phase)*field.grid[i][j].neighbors[2]->particleComp +
+                                (1-field.grid[i][j].neighbors[3]->phase)*field.grid[i][j].neighbors[3]->particleComp -
+                                (4*(1-field.grid[i][j].phase)*field.grid[i][j].particleComp));
+    }
+    
+    // Calculate and return potential with Laplacian
+    return modelConfig.particleSolidIntEnergy * 
+           field.grid[i][j].phase * 
+           field.grid[i][j].phase * 
+           field.grid[i][j].particleComp * 
+           field.grid[i][j].particleComp *
+           particleCompLaplacian;
+}
 
 
 
