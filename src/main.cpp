@@ -1,6 +1,9 @@
 #include <iostream>
 #include "model.hpp"
 #include "modelStartup.hpp"
+#include "importConfig.hpp"
+#include <omp.h>
+#include <direct.h> // For _getcwd on Windows
 
 #include <fstream>
 #include <vector>
@@ -9,81 +12,63 @@
 #include <chrono>
 
 // These functions must be implemented to fill only the specified region of the output array
-void calcGrainDiffEnergyRegion(gridField& model, config& configData,
-    std::vector<std::vector<std::vector<double>>>& grainDiffEn,
-    int i_start, int i_end, int j_start, int j_end);
-
-void calcPhaseDiffEnergyRegion(gridField& model, config& configData,
-    std::vector<std::vector<double>>& phaseDiffEn,
-    int i_start, int i_end, int j_start, int j_end);
-
-void calcTempDiffRegion(gridField& model, config& configData,
-    std::vector<std::vector<double>>& tempGrad,
-    int i_start, int i_end, int j_start, int j_end);
-
-void calcParticleCompDiffRegion(gridField& model, config& configData,std::vector<std::vector<double>>& tempPartComp,int i_start, int i_end, int j_start, int j_end);
-
 int main() {
-    std::cout << "PhaseField Sim Starting" << std::endl;
+    std::cout << "Program started" << std::endl << std::flush;
+    
+    // Print working directory
+    char cwd[256];
+    if (_getcwd(cwd, sizeof(cwd)) != NULL) {
+        std::cout << "Current working directory: " << cwd << std::endl << std::flush;
+    } else {
+        std::cerr << "Could not get current working directory" << std::endl << std::flush;
+    }
+
+    std::cout << "About to start PhaseField Sim..." << std::endl << std::flush;
     auto start = std::chrono::steady_clock::now();
-    config configData = inputConfig();
+    
+    std::cout << "Attempting to read config file..." << std::endl << std::flush;
+    config configData = inputConfig("config/config.txt");
     if (configData.success == 0) {
-        std::cerr << "Config Failed";
+        std::cerr << "Config Failed to load from: config/config.txt" << std::endl << std::flush;
         return 1;
     }
+    std::cout << "Config loaded successfully" << std::endl << std::flush;
+
+
 
     gridField model;
     model.init(configData);
-    std::vector<std::vector<std::vector<double>>> grainDiffEn(configData.steps[0],std::vector<std::vector<double>>(configData.steps[1],std::vector<double>(model.numGrains)));
-    std::vector<std::vector<double>> phaseDiffEn(configData.steps[0],std::vector<double>(configData.steps[1]));
-    std::vector<std::vector<double>> tempGrad(configData.steps[0],std::vector<double>(configData.steps[1]));
-    std::vector<std::vector<double>> tempPartComp(configData.steps[0],std::vector<double>(configData.steps[1]));
-    // Calculate section sizes for 4x4 grid
-    int i_eighth = configData.steps[0] / 8;
-    int j_eighth = configData.steps[1] / 8;
+    std::array<std::array<double,9>,1000000> grainDiffEn;
+    std::array<double,1000000> phaseDiffEn;
+    std::array<double,1000000>  tempGrad;
+    std::array<double,1000000> tempPartComp;
+    node* nd;
+
+
 
     for (int t = 0; t < configData.timeSteps; t++) {
         if (t%100 == 0) std::cout << t << "/" << configData.timeSteps << std::endl;
-        std::vector<std::thread> threads;
+        #pragma omp parallel for
+        for (int node = 0; node < 1000000; node++) {
+            nd = model.allNodes[node];
 
-        // Create 16 threads in a 4x4 grid
-        for (int i = 0; i < 8; i++) {
-            for (int j = 0; j < 8; j++) {
-                int i_start = i * i_eighth;
-                int i_end = (i == 7) ? configData.steps[0] : (i + 1) * i_eighth;
-                int j_start = j * j_eighth;
-                int j_end = (j == 7) ? configData.steps[1] : (j + 1) * j_eighth;
-
-                // Launch phase and temp calculations
-                threads.push_back(std::thread([&, i_start, i_end, j_start, j_end]() {
-                    calcPhaseDiffEnergyRegion(model, configData, phaseDiffEn, i_start, i_end, j_start, j_end);
-                }));
-
-
-                // Launch grain calculations
-                threads.push_back(std::thread([&, i_start, i_end, j_start, j_end]() {
-                    calcGrainDiffEnergyRegion(model, configData, grainDiffEn, i_start, i_end, j_start, j_end);
-                }));
-                threads.push_back(std::thread([&, i_start, i_end, j_start, j_end]() {
-                    calcParticleCompDiffRegion(model, configData, tempPartComp,  i_start, i_end, j_start, j_end);
-                }));
-            }
+    
+            phaseDiffEn[node] = calcPhaseDiffEnergy(nd, configData);
+            tempPartComp[node] = calcParticleCompDiff(nd, configData);
+            grainDiffEn[node] = calcGrainDiffEnergy(nd, configData);
         }
-        // Launch temperature calculation in main thread
-        threads.push_back(std::thread([&]() {
-            tempGrad = updateTemp(configData.tGrad, configData.coolingRate, t, configData.dx, configData.dt, configData.steps[0], configData.steps[1], configData.startTemp,  configData.minTemp);
-        }));
+        tempGrad = updateTemp(configData.tGrad, configData.coolingRate, t, configData.dx, configData.dt, configData.steps[0], configData.steps[1], configData.startTemp, configData.minTemp);
+
+        
+
 
         // Join all threads
-        for (auto& thread : threads) {
-            thread.join();
-        }
+
         //std::cout << "Threads Joined" << std::endl;
 
         // Update the entire grid in a single call
-        model.update(phaseDiffEn, tempGrad, grainDiffEn, tempPartComp, configData, 0, configData.steps[0], 0, configData.steps[1]);
-       // std::cout<<"Grid Updated"<<std::endl;
-        model.resizeGrainDiffEn(grainDiffEn, model.numGrains);
+        model.update(phaseDiffEn, tempGrad, grainDiffEn, tempPartComp);
+
     }
 
     std::string fileNameTemp = "TempGrid.csv";
@@ -166,6 +151,8 @@ int main() {
     
     std::cout << "Elapsed(ms)=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() << std::endl;
     return 0;
+
 }
 
 // Helper function to resize grainDiffEn everywhere
+

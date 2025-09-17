@@ -2,6 +2,8 @@
 #include "model.hpp"
 #include "modelStartup.hpp"
 #include <cmath>
+#include <algorithm>
+#include <omp.h>
 
 
 
@@ -9,7 +11,7 @@
 
 double sumOtherGrainsSquared(int notIndex,node Node, int numGrains) {
     double notThisGrain = 0;
-    for (int gr = 0; gr < numGrains;gr++) {
+    for (int gr = 0; gr < 9;gr++) {
         notThisGrain = notThisGrain + (Node.grainPhases[gr]*Node.grainPhases[gr]);
     }
     return notThisGrain-(Node.grainPhases[notIndex]*Node.grainPhases[notIndex]);
@@ -29,13 +31,13 @@ double ifLiq(double temp, double meltTemp) {
 }
 
 double calcGrainBoundaryEnergy(eulerAngles orient, std::vector<double> gradient) {
-    std::vector<double> gradNormal = {-1*gradient[1],1*gradient[0],0};
+    std::array<double,3> gradNormal = {-1*gradient[1],1*gradient[0],0};
 
-    std::vector<double> surfPlaneVec =eulerRotate(orient,gradNormal);
+    std::array<double,3> surfPlaneVec = eulerRotate(orient,gradNormal);
     
-    double angle110 = dotAngle(surfPlaneVec,std::vector<double> {1,1,0});
-    double angle111 = dotAngle(surfPlaneVec,std::vector<double> {1,1,1});
-    double angle100 = dotAngle(surfPlaneVec,std::vector<double> {1,0,0});
+    double angle110 = dotAngle(surfPlaneVec,std::array<double,3> {1,1,0});
+    double angle111 = dotAngle(surfPlaneVec,std::array<double,3> {1,1,1});
+    double angle100 = dotAngle(surfPlaneVec,std::array<double,3> {1,0,0});
     if (std::isnan(angle110)) { 
         return 0;
     }
@@ -79,8 +81,8 @@ double calcGrainBoundaryEnergy(eulerAngles orient, std::vector<double> gradient)
 
 
 
-//Math Equations
-std::vector<double> eulerRotate(eulerAngles orient, std::vector<double> rotatedVector) {
+    //Math Equations
+    std::array<double,3> eulerRotate(eulerAngles orient, std::array<double,3> rotatedVector) {
     double c1 = std::cos(orient.theta1), s1 = std::sin(orient.theta1);
     double cP = std::cos(orient.phi),  sP = std::sin(orient.phi);
     double c2 = std::cos(orient.theta2), s2 = std::sin(orient.theta2);
@@ -109,7 +111,7 @@ std::vector<double> eulerRotate(eulerAngles orient, std::vector<double> rotatedV
 
 }
 
-double dotAngle(std::vector<double> vec1, std::vector<double> vec2) {
+double dotAngle(std::array<double,3> vec1, std::array<double,3> vec2) {
     //std::cout << "Vector 1: " << vec1[0] << ", " << vec1[1] << ", " << vec1[2] << std::endl;
     //std::cout << "Vector 2: " << vec2[0] << ", " << vec2[1] << ", " << vec2[2] << std::endl;
     double adotb = vec1[0]*vec2[0]+vec1[1]*vec2[1]+vec1[2]*vec2[2];
@@ -132,215 +134,74 @@ double dotAngle(std::vector<double> vec1, std::vector<double> vec2) {
 
 }
 
-void calcPhaseDiffEnergyRegion(gridField& field, config& modelConfig,
-    std::vector<std::vector<double>>& diffFree,
-    int i_start, int i_end, int j_start, int j_end) {
-    double pha, eLoc, eGrad;
-    for (int ii = i_start; ii < i_end; ii++) {
-        for (int jj = j_start; jj < j_end; jj++) {
-            pha = field.grid[ii][jj].phase;
-            double liq = ifLiq(field.grid[ii][jj].temp, modelConfig.meltTemp);
-            eLoc = modelConfig.phaseCoefficient * (
-                -2 * (1 - pha) * liq + 2 * pha * (1 - liq)
-            );
-            double grainSum = 0.0;
-            for (int g = 0; g < field.grid[ii][jj].activeGrains.size(); g++) {
-                grainSum += field.grid[ii][jj].grainPhases[field.grid[ii][jj].activeGrains[g]] * field.grid[ii][jj].grainPhases[field.grid[ii][jj].activeGrains[g]];
-                //std::cout << "Grain " << field.grid[ii][jj].activeGrains[g] << " Phase: " << field.grid[ii][jj].grainPhases[field.grid[ii][jj].activeGrains[g]] << std::endl;
-                //std::cout << "Grain Sum: " << grainSum << std::endl;
-            }
-
-            
-            
-            eLoc += modelConfig.grainPreCo * (-2 * (1 - pha) * grainSum);
-            
-            eGrad = (field.grid[ii][jj].neighbors[0]->phase +
-                     field.grid[ii][jj].neighbors[1]->phase +
-                     field.grid[ii][jj].neighbors[2]->phase +
-                     field.grid[ii][jj].neighbors[3]->phase - 4 * pha) * modelConfig.phaseGradCo;
-            diffFree[ii][jj] = eLoc + eGrad + field.grid[ii][jj].particleComp*field.grid[ii][jj].particleComp*2*field.grid[ii][jj].phase*modelConfig.particleSolidIntEnergy; ;
-            //std::cout << "Phase Energy at (" << ii << "," << jj << "): " << diffFree[ii][jj] << " From Grad: " << eGrad << std::endl;
-        }
+double calcPhaseDiffEnergy(node* nd, config mConfig) {
+    double pha = nd->phase;
+    double part = nd->particleComp;
+    double liq = ifLiq(nd->temp, mConfig.meltTemp);
+    double eLoc = mConfig.phaseCoefficient * (
+        -2 * (1 - pha) * liq + 2 * pha * (1 - liq) 
+    );
+    double grainSum = 0.0;
+    for (int g = 0; g < 9; g++) {
+        grainSum += nd->exists*nd->grainPhases[nd->activeGrains[g]] * nd->grainPhases[nd->activeGrains[g]];
     }
+    eLoc += mConfig.grainPreCo * (-2 * (1 - pha) * grainSum) + (2*pha*part*part*mConfig.particleSolidIntEnergy+(-2+2*pha)*(part)*(part)*mConfig.particleLiquidIntEnergy);
+    double eGrad = (nd->neighbors[0]->phase +
+             nd->neighbors[1]->phase +
+             nd->neighbors[2]->phase +
+             nd->neighbors[3]->phase - (nd->neighbors[0]->exists + nd->neighbors[1]->exists + nd->neighbors[2]->exists + nd->neighbors[3]->exists) * pha) * mConfig.phaseGradCo;
+    double diffFree = eLoc + eGrad + nd->particleComp*nd->particleComp*2*nd->phase*mConfig.particleSolidIntEnergy; ;
+    return diffFree;
+}
+std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
+    std::array<double,9> diffFree;
+    std::array<double,4> grainGradVals {0,0,0,0};
+    for (int g = 0; g < 9; g++) {
+        double gra = nd->grainPhases[nd->activeGrains[g]];
+
+        for (int gg = 0; gg < 9; gg++) {
+            if (nd->activeGrains[g] == nd->neighbors[0]->activeGrains[gg]) {
+                grainGradVals[0] = nd->neighbors[0]->grainPhases[gg];
+            }
+            if (nd->activeGrains[g] == nd->neighbors[1]->activeGrains[gg]) {
+                grainGradVals[1] = nd->neighbors[1]->grainPhases[gg];
+            }
+            if (nd->activeGrains[g] == nd->neighbors[2]->activeGrains[gg]) {
+                grainGradVals[2] = nd->neighbors[2]->grainPhases[gg];
+            }
+            if (nd->activeGrains[g] == nd->neighbors[3]->activeGrains[gg]) {
+                grainGradVals[3] = nd->neighbors[3]->grainPhases[gg];
+            }
+        }
+        double grainGrad = (
+            grainGradVals[0] + grainGradVals[1] + grainGradVals[2] + grainGradVals[3] -
+            (nd->neighbors[0]->exists + nd->neighbors[1]->exists + nd->neighbors[2]->exists + nd->neighbors[3]->exists) * nd->grainPhases[g]) * -1 * mConfig.grainGradCo;
+
+        double comp = sumOtherGrainsSquared(nd->activeGrains[g], *nd, 9);
+        double solid = 1.0 - ifLiq(nd->temp, mConfig.meltTemp);
+
+        double gbEnergy = calcGrainBoundaryEnergy(nd->orientations[g], {
+            0.5*(grainGradVals[0] + grainGradVals[1])-nd->grainPhases[g],
+            0.5*(grainGradVals[2] + grainGradVals[3])-nd->grainPhases[g]
+        });
+        grainGrad = grainGrad * gbEnergy;
+
+        double grainEnergy = mConfig.grainPreCo * (gra * gra * gra * gra - gra + (1000 / mConfig.cellArea) * gra * comp * gbEnergy * mConfig.grainIntWidth + 2 * gra * solid * solid);
+
+        diffFree[g] = mConfig.dt * (grainGrad + grainEnergy);
+    }
+    return diffFree;
 }
 
-void calcGrainDiffEnergyRegion(gridField& field, config& modelConfig,
-    std::vector<std::vector<std::vector<double>>>& diffFree,
-    int i_start, int i_end, int j_start, int j_end) {
-    for (int i = i_start; i < i_end; i++) {
-        for (int j = j_start; j < j_end; j++) {
-            for (int g = 0; g < field.grid[i][j].activeGrains.size(); g++) {
-                double gra = field.grid[i][j].grainPhases[field.grid[i][j].activeGrains[g]];
-                double grainGrad = (
-                    field.grid[i][j].neighbors[0]->grainPhases[field.grid[i][j].activeGrains[g]] +
-                    field.grid[i][j].neighbors[1]->grainPhases[field.grid[i][j].activeGrains[g]] +
-                    field.grid[i][j].neighbors[2]->grainPhases[field.grid[i][j].activeGrains[g]] +
-                    field.grid[i][j].neighbors[3]->grainPhases[field.grid[i][j].activeGrains[g]] -
-                    4 * gra
-                ) * -1 * modelConfig.grainGradCo;
 
-                double comp = sumOtherGrainsSquared(field.grid[i][j].activeGrains[g], field.grid[i][j], field.numGrains);
-                double solid = 1.0 - ifLiq(field.grid[i][j].temp, modelConfig.meltTemp);
 
-                double gbEnergy = calcGrainBoundaryEnergy(field.orientations[field.grid[i][j].activeGrains[g]], {
-                    0.5 * field.grid[i][j].neighbors[0]->grainPhases[field.grid[i][j].activeGrains[g]] + 0.5 * field.grid[i][j].neighbors[1]->grainPhases[field.grid[i][j].activeGrains[g]] - field.grid[i][j].grainPhases[field.grid[i][j].activeGrains[g]],
-                    0.5 * field.grid[i][j].neighbors[2]->grainPhases[field.grid[i][j].activeGrains[g]] + 0.5 * field.grid[i][j].neighbors[3]->grainPhases[field.grid[i][j].activeGrains[g]] - field.grid[i][j].grainPhases[field.grid[i][j].activeGrains[g]],
-                });
-                grainGrad = grainGrad * gbEnergy;
 
-                double grainEnergy = modelConfig.grainPreCo * (gra * gra * gra * gra - gra + (1000 / modelConfig.cellArea) * gra * comp * gbEnergy * modelConfig.grainIntWidth + 2 * gra * solid * solid);
-
-                diffFree[i][j][field.grid[i][j].activeGrains[g]] = modelConfig.dt * (grainGrad + grainEnergy);
-            }
-        }
-    }
-}
-
-void calcTempDiffRegion(gridField& field, config& modelConfig,
-    std::vector<std::vector<double>>& tempDiff,
-    int i_start, int i_end, int j_start, int j_end) {
-    // Top boundary
-    if (i_start == 0) {
-        for (int j = j_start; j < j_end; j++) {
-            tempDiff[0][j] = (1 / (modelConfig.dx * modelConfig.dx)) *
-                (field.grid[0][j].neighbors[0]->temp +
-                 field.grid[0][j].neighbors[1]->temp +
-                 field.grid[0][j].neighbors[3]->temp -
-                 (3 * field.grid[0][j].temp));
-        }
-    }
-
-    // Interior
-    for (int i = std::max(i_start, 1); i < std::min(i_end, modelConfig.steps[0] - 1); i++) {
-        for (int j = j_start; j < j_end; j++) {
-            tempDiff[i][j] = (1 / (modelConfig.dx * modelConfig.dx)) *
-                (field.grid[i][j].neighbors[0]->temp +
-                 field.grid[i][j].neighbors[1]->temp +
-                 field.grid[i][j].neighbors[2]->temp +
-                 field.grid[i][j].neighbors[3]->temp -
-                 4 * field.grid[i][j].temp);
-        }
-    }
-
-    // Bottom boundary
-    int bottomMostStep = modelConfig.steps[0] - 1;
-    if (i_end == modelConfig.steps[0]) {
-        for (int j = j_start; j < j_end; j++) {
-            tempDiff[bottomMostStep][j] = (1 / (modelConfig.dx * modelConfig.dx)) *
-                (field.grid[bottomMostStep][j].neighbors[0]->temp +
-                 field.grid[bottomMostStep][j].neighbors[1]->temp +
-                 field.grid[bottomMostStep][j].neighbors[2]->temp +
-                 modelConfig.basePlateTemp -
-                 (4 * field.grid[bottomMostStep][j].temp));
-        }
-    }
-}
-
-void calcParticleCompDiffRegion(gridField& field, config& modelConfig,
-    std::vector<std::vector<double>>& tempPartComp,
-    int i_start, int i_end, int j_start, int j_end) {
-    
-    for (int i = i_start; i < i_end; i++) {
-        for (int j = j_start; j < j_end; j++) {
-            // Calculate Laplacian of particleComp first
-            double particleCompLaplacian;
-            if (i == 0) {
-                // Fixed top boundary condition - only use side and bottom neighbors
-                particleCompLaplacian = ((1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[1]->particleComp +  // right
-                                       (1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[0]->particleComp +  // left
-                                       (1-field.grid[i][j].neighbors[2]->phase)*field.grid[i][j].neighbors[2]->particleComp -  // bottom
-                                       ((1-field.grid[i][j].phase) * 3 * field.grid[i][j].particleComp));
-            }
-            else if (i == modelConfig.steps[0] - 1) {
-                particleCompLaplacian = ((1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[0]->particleComp +
-                                       (1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[1]->particleComp +
-                                       (1-field.grid[i][j].neighbors[2]->phase)*field.grid[i][j].neighbors[2]->particleComp -
-                                       (3*(1-field.grid[i][j].phase)*field.grid[i][j].particleComp));
-            }
-            else {
-                particleCompLaplacian = ((1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[0]->particleComp +
-                                       (1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[1]->particleComp +
-                                       (1-field.grid[i][j].neighbors[2]->phase)*field.grid[i][j].neighbors[2]->particleComp +
-                                       (1-field.grid[i][j].neighbors[3]->phase)*field.grid[i][j].neighbors[3]->particleComp -
-                                       (4*(1-field.grid[i][j].phase)*field.grid[i][j].particleComp));
-            }
-
-            // Calculate potential at current point
-            double currentPotential =modelConfig.particleSolidIntEnergy * 
-                                    field.grid[i][j].phase *
-                                    field.grid[i][j].particleComp *
-                                    particleCompLaplacian;
-
-            // Calculate Laplacian of potentials
-            if (i == 0) {
-                tempPartComp[i][j] = (
-                    getPotentialWithLaplacian(field, modelConfig, i, j-1) +
-                    getPotentialWithLaplacian(field, modelConfig, i, j+1) +
-                    getPotentialWithLaplacian(field, modelConfig, i+1, j) -
-                    (3 * currentPotential)
-                ) / (modelConfig.dx * modelConfig.dx);
-            }
-            else if (i == modelConfig.steps[0] - 1) {
-                tempPartComp[i][j] = (
-                    getPotentialWithLaplacian(field, modelConfig, i-1, j) +
-                    getPotentialWithLaplacian(field, modelConfig, i, j-1) +
-                    getPotentialWithLaplacian(field, modelConfig, i, j+1) -
-                    (3 * currentPotential)
-                ) / (modelConfig.dx * modelConfig.dx);
-            }
-            else {
-                tempPartComp[i][j] = (
-                    getPotentialWithLaplacian(field, modelConfig, i-1, j) +
-                    getPotentialWithLaplacian(field, modelConfig, i+1, j) +
-                    getPotentialWithLaplacian(field, modelConfig, i, j-1) +
-                    getPotentialWithLaplacian(field, modelConfig, i, j+1) -
-                    (4 * currentPotential)
-                ) / (modelConfig.dx * modelConfig.dx);
-            }
-            tempPartComp[i][j] = particleCompLaplacian;
-            //std::cout << "Particle Comp Energy at (" << i << "," << j << "): " << tempPartComp[i][j] << std::endl;
-        }
-    }
-    
-}
-
-// Helper function to calculate potential with Laplacian at a given point
-inline double getPotentialWithLaplacian(gridField& field, config& modelConfig, int i, int j) {
-    // Handle periodic boundary conditions for j
-    if (j < 0) j = modelConfig.steps[1] - 1;
-    if (j >= modelConfig.steps[1]) j = 0;
-    
-    // Calculate Laplacian of particleComp at this point
-    double particleCompLaplacian;
-    if (i == 0) {
-        // Fixed top boundary - only use side and bottom neighbors
-        particleCompLaplacian = (1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[1]->particleComp +  // right
-                                (1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[0]->particleComp +  // left
-                                (1-field.grid[i][j].neighbors[3]->phase)*field.grid[i][j].neighbors[2]->particleComp -  // bottom
-                                (3*(1-field.grid[i][j].phase)*field.grid[i][j].particleComp);
-    }
-    else if (i == modelConfig.steps[0] - 1) {
-        // Bottom boundary remains the same
-            particleCompLaplacian = ((1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[0]->particleComp +
-                                    (1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[1]->particleComp +
-                                    (1-field.grid[i][j].neighbors[2]->phase)*field.grid[i][j].neighbors[2]->particleComp -
-                                    (3*(1-field.grid[i][j].phase)*field.grid[i][j].particleComp));
-        }
-    else {
-        particleCompLaplacian = ((1-field.grid[i][j].neighbors[0]->phase)*field.grid[i][j].neighbors[0]->particleComp +
-                                (1-field.grid[i][j].neighbors[1]->phase)*field.grid[i][j].neighbors[1]->particleComp +
-                                (1-field.grid[i][j].neighbors[2]->phase)*field.grid[i][j].neighbors[2]->particleComp +
-                                (1-field.grid[i][j].neighbors[3]->phase)*field.grid[i][j].neighbors[3]->particleComp -
-                                (4*(1-field.grid[i][j].phase)*field.grid[i][j].particleComp));
-    }
-    
-    // Calculate and return potential with Laplacian
-    return modelConfig.particleSolidIntEnergy * 
-           field.grid[i][j].phase * 
-           field.grid[i][j].phase * 
-           field.grid[i][j].particleComp * 
-           field.grid[i][j].particleComp *
-           particleCompLaplacian;
+double calcParticleCompDiff(node* nd, config& modelConfig) {
+    double part = nd->particleComp;
+    double pha = nd->phase;
+    double en = 2*part*pha*pha*modelConfig.particleSolidIntEnergy
+    + 2*part*(1-pha)*(1-pha)*modelConfig.particleLiquidIntEnergy;
+    return en;
 }
 
 

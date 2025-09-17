@@ -2,59 +2,21 @@
 #include <vector>
 #include <array>
 #include <random>
+#include "importConfig.hpp"
 
 
 
 
-struct config {
 
-    double meltTemp; //K
-    double dx; //um
-    double dt; //s
-    double kSolid; //W/m*k
-    double kLiquid; //W/m*k
-    int success;
-    double startTemp; //K
-    double cellWidth;//um
-    double cellHeight;//um
-    double cellArea;
-    double particleVolFraction;
-    double liqSolIntWidth; //um
-    double grainIntWidth; //um
-    int timeSteps;
-    double underCoolReq;
-    int totalSteps;
-    double liqSolIntE;
-    double grainIntE;
-    std::vector<int> steps;
-    double phaseCoefficient;
-    double barrierHeightPhase;
-    double barrierHeightGrain;
-    double phasePreCo;
-    double grainPreCo;
-    double particleSlowingCoefficient;
-    double phaseGradCo;
-    double basePlateTemp;
-    double heatCapacity;
-    double density;
-    double grainGradCo;
-    double homoNucCoeff;
-    double minTemp;
-    double tGrad;
-    double coolingRate;
-    double drivingForceSlopek;
-    double drivingForceIntercept;
-    double molarMass;
-    double molarVolume;
-    double diffusionActivationEnergy;
-    double particleSolidIntEnergy;
 
+
+struct eulerAngles {
+    double theta1;
+    double phi;
+    double theta2;
 };
 
 
-
-
-config inputConfig();
 
 
 struct node {
@@ -62,56 +24,47 @@ struct node {
     double temp;
     double phase;
     double particleComp;
-    std::vector<double> grainPhases;
-    std::vector<int> activeGrains;
-    
-    node* neighbors[4]; //x-1,x+1,y-1,y+1
+    double exists;
+    int grainsHere;
+    std::array<eulerAngles, 9> orientations;
+    std::array<double, 9> grainPhases;
+    std::array<int, 9> activeGrains;
+
+    std::array<node*, 4> neighbors; //x-1,x+1,y-1,y+1
     float calcNucRate(config modelConf);
     
 };
 
-struct eulerAngles {
-    double theta1;
-    double phi;
-    double theta2;
-};
+
+
 struct gridField {
-    std::vector<std::vector<node>> grid;
-    std::vector<std::vector<node*>> grainActiveNodes;
-    void buildGrid(int heightSteps, int widthSteps);
+    config mConfig;
+    std::array<std::array<node,1000>,1000> grid;
+    std::array<node*,1000000> allNodes;
+    void buildGrid();
     void init(config modelConfig);
     
 
     int numGrains;
-    std::vector<eulerAngles> orientations; // Theta1 Phi Theta2 Euler Angles
+     // Theta1 Phi Theta2 Euler Angles
     node top;
     node bottom;
-    std::vector<int> grainLocTemporary;
+    std::array<int,2> grainLocTemporary;
 
-    void addGrain(std::vector<int> nucleus, config modelConf);
+    void addGrain(node* nucleus);
+
+    
 
     // Updated update function for quadrant support:
     void update(
-        std::vector<std::vector<double>> &phaseDiffEn,
-        std::vector<std::vector<double>> &tempGrad,
-        std::vector<std::vector<std::vector<double>>> &grainDiffEn,
-        std::vector<std::vector<double>> &tempPartComp,
-        config &modelConf,
-        int i_start, int i_end, int j_start, int j_end
+    std::array<double,1000000> &phaseDiffEn,
+    std::array<double,1000000> &tempGrad,
+    std::array<std::array<double,9>,1000000> &grainDiffEn,
+    std::array<double,1000000> &tempPartComp
     );
-    void resizeGrainDiffEn(std::vector<std::vector<std::vector<double>>>& grainDiffEn, int numGrains) {
-        for (auto& row : grainDiffEn) {
-            for (auto& cell : row) {
-                if (cell.size() != numGrains)
-                    cell.resize(numGrains, 0.0);
-            }
-        }
-    };
-    
 };
 
 
 
-
-std::vector<std::vector<double>> updateTemp(double tGrad, double tRate, int timeStep, double dx, double dt, int iSteps, int jSteps, double startTemp, double minTemp);
+std::array<double,1000000> updateTemp(double tGrad, double tRate, int timeStep, double dx, double dt, int iSteps, int jSteps, double startTemp, double minTemp);
 

@@ -1,166 +1,44 @@
 #include <iostream>
 #include "modelStartup.hpp"
 #include <fstream>
-#include <string>
-#include <sstream>
 #include <random>
 #include <cmath>
-#include "json.hpp" 
-#include <iomanip>
-using json = nlohmann::json;
 #include <mutex>
+#include <omp.h>
+
 static std::mutex grain_mutex;
 
-config inputConfig() {
-    config newConfig;
-    std::string configPath = "../config/modelConfig.json";
-    std::ifstream configIn(configPath);
-    if (!configIn.is_open()) {
-        std::cout << "Model Config File Not Found. Generating default config at: " << configPath << std::endl;
-        std::ofstream configOut(configPath);
-        if (!configOut) {
-            std::cerr << "Failed to create config file!" << std::endl;
-            newConfig.success =  0;
-            return newConfig;
-        }
-        configOut << "{\n";
-        configOut << "  \"dx_um\": 0.5,\n";
-        configOut << "  \"meltTemp\": 2896,\n";
-        configOut << "  \"HeatCapacityJKgK\": 251,\n"; // Mo
-        configOut << "  \"Densitykgm3\": 10280,\n";    // Mo
-        configOut << "  \"dt_s\": 0.001,\n";
-        configOut << "  \"startTempK\": 3000,\n";
-        configOut << "  \"solidConductivityWMK\": 138,\n"; // Mo
-        configOut << "  \"cellHeightum\": 100,\n";
-        configOut << "  \"cellWidthum\": 100,\n";
-        configOut << "  \"particleVolumeFraction\": 0.01,\n";
-        configOut << "  \"LiqSolIntEnergyJm2\": 0.3,\n";
-        configOut << "  \"LiqSolIntWidthum\": 0.3,\n";
-        configOut << "  \"GrainIntEnergyJm2\": 0.3,\n";
-        configOut << "  \"GrainIntWidthum\": 0.3,\n";
-        configOut << "  \"PhaseBarrierHeightCoefficient\": 0.25,\n";
-        configOut << "  \"BasePlateTempK\": 500.00,\n";
-        configOut << "  \"HomogeneousNucleationCoefficient\": 100,\n";
-        configOut << "  \"TimeSteps\": 10000,\n";
-        configOut << "  \"UndercoolingRequirement\": 0.95,\n";
-        configOut << "  \"CoolingRatempers\": 100,\n";
-        configOut << "  \"MinimumTempK\": 300,\n";
-        configOut << "  \"tempGradKperm\": 1.0,\n";
-        configOut << "  \"molarMass\": 95.95,\n";
-        configOut << "  \"drivingForceSlopek\": 0.0138,\n";
-        configOut << "  \"drivingForceIntercept\": 39.842,\n";
-        configOut << "  \"diffusionActivationEnergy\": 1.5,\n";
-        configOut << "  \"ParticleSolidIntEnergy\": 6.0,\n";
-        configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
-
-        configOut << "}\n";
-        configOut.close();
-        std::cout << "Default Config Created. Please Edit and Rerun Program";
-        newConfig.success = 0;
-    }
-    std::string line;
-    json j;
-    configIn >> j;
-    newConfig.dx = j["dx_um"];
-    newConfig.dx = newConfig.dx*1e-6;
-    newConfig.dt = j["dt_s"];
-    newConfig.startTemp = j["startTempK"];
-    newConfig.kSolid = j["solidConductivityWMK"];
-    newConfig.cellHeight = j["cellHeightum"];
-    newConfig.cellHeight = newConfig.cellHeight*1e-6;
-    newConfig.cellWidth = j["cellWidthum"];
-    newConfig.cellWidth = newConfig.cellWidth*1e-6;
-    newConfig.cellArea = newConfig.cellHeight * newConfig.cellWidth;
-    newConfig.particleVolFraction = j["particleVolumeFraction"];
-    newConfig.liqSolIntE = j["LiqSolIntEnergyJm2"];
-    newConfig.liqSolIntWidth = j["LiqSolIntWidthum"];
-    newConfig.liqSolIntWidth = newConfig.liqSolIntWidth*1e-6;
-    newConfig.phaseCoefficient = 0.75*newConfig.liqSolIntWidth * newConfig.liqSolIntE;
-    newConfig.barrierHeightGrain = j["GrainBarrierHeightCoefficient"];
-    newConfig.barrierHeightGrain = newConfig.barrierHeightGrain*1e-6;
-    newConfig.barrierHeightPhase = j["PhaseBarrierHeightCoefficient"];
-    newConfig.barrierHeightPhase = newConfig.barrierHeightPhase*1e-6;
-    newConfig.basePlateTemp = j["BasePlateTempK"];
-    newConfig.meltTemp = j["meltTemp"];
-    newConfig.heatCapacity = j["HeatCapacityJKgK"];
-    newConfig.density = j["Densitykgm3"];
-    newConfig.kLiquid = newConfig.kSolid * 0.45; 
-    newConfig.grainIntWidth = j["GrainIntWidthum"];
-    newConfig.grainIntWidth = newConfig.grainIntWidth*1e-6;
-    newConfig.grainIntE = j["GrainIntEnergyJm2"];
-    newConfig.grainIntE = newConfig.grainIntE;
-    newConfig.phasePreCo = 0.75*newConfig.liqSolIntE/(newConfig.barrierHeightPhase*newConfig.liqSolIntWidth);
-    newConfig.grainPreCo = 0.75*newConfig.grainIntE/(newConfig.barrierHeightGrain*newConfig.grainIntWidth);
-    newConfig.phaseGradCo = 0.75*newConfig.liqSolIntE*newConfig.liqSolIntWidth;
-    newConfig.particleSlowingCoefficient = 0;
-    newConfig.success = 1;
-    newConfig.timeSteps = j["TimeSteps"];
-    newConfig.grainGradCo = 0.5*newConfig.grainIntWidth;
-    newConfig.homoNucCoeff =j["HomogeneousNucleationCoefficient"];
-    newConfig.underCoolReq = j["UndercoolingRequirement"];
-    newConfig.coolingRate = j["CoolingRatempers"];
-    std::cout << newConfig.coolingRate << std::endl;
-    newConfig.tGrad = j["tempGradKperm"];
-    newConfig.coolingRate =j["CoolingRatempers"];
-    newConfig.minTemp = j["MinimumTempK"];
-    newConfig.drivingForceSlopek = j["drivingForceSlopek"];
-    newConfig.drivingForceIntercept = j["drivingForceIntercept"];
-    newConfig.diffusionActivationEnergy = j["diffusionActivationEnergy"];
-    newConfig.molarMass = j["molarMass"];
-    newConfig.particleSolidIntEnergy = j["particleSolidIntEnergy"];
+void gridField::buildGrid() {
 
 
-    newConfig.molarVolume = (newConfig.molarMass) / (newConfig.density*1000);
-
-    std::cout << "The Step Size is " << newConfig.dx << std::endl;
-    int height = static_cast<int>(std::ceil(newConfig.cellHeight / newConfig.dx));
-
-
-
-    int width = static_cast<int>(std::ceil(newConfig.cellWidth / newConfig.dx));
-    std::vector<int> steps = {height,width};
-    newConfig.steps = steps;
-
-
-    int totalSteps = steps[0] * steps[1];
-    newConfig.totalSteps = totalSteps;
-
-   
+    std::array<std::array<double,1000>,1000> tempGrid;
     
-    
-
-    newConfig.success = 1;
-    return newConfig;
-};
-
-
-
-void gridField::buildGrid(int widthSteps, int heightSteps) {
-    std::cout << widthSteps << " wide " << heightSteps << " Tall" << std::endl;
-    grid.resize(heightSteps,std::vector<node>(widthSteps));
-    for (int j = 0; j< widthSteps;j++) {
+    for (int j = 0; j< 1000;j++) {
         node& gp = grid[0][j];
-        gp.neighbors[0] = (j>0) ? &grid[0][j-1]:&grid[0][widthSteps-1]; //Left
-        gp.neighbors[1] = (j<widthSteps-1) ? &grid[0][j+1]:&grid[0][0]; //Right
+        gp.neighbors[0] = (j>0) ? &grid[0][j-1]:&grid[0][1000-1]; //Left
+        gp.neighbors[1] = (j<1000-1) ? &grid[0][j+1]:&grid[0][0]; //Right
         gp.neighbors[2] =&top;
         gp.neighbors[3] = &grid[1][j]; //Down
+        allNodes[j] = &gp;
         
     }
-    for (int i = 1; i< heightSteps;i++) {
-        for (int j = 0; j < widthSteps;j++) {
+    for (int i = 1; i< 1000-1;i++) {
+        for (int j = 0; j < 1000;j++) {
             node& gp = grid[i][j];
-            gp.neighbors[0] = (j>0) ? &grid[i][j-1]:&grid[i][widthSteps-1]; //Left
-            gp.neighbors[1] = (j<widthSteps-1) ? &grid[i][j+1]:&grid[i][0]; //Right
+            gp.neighbors[0] = (j>0) ? &grid[i][j-1]:&grid[i][1000-1]; //Left
+            gp.neighbors[1] = (j<1000-1) ? &grid[i][j+1]:&grid[i][0]; //Right
             gp.neighbors[2] = (i>0) ? &grid[i-1][j]: nullptr;//up
-            gp.neighbors[3] = (i<heightSteps-1) ? &grid[i+1][j]: nullptr; //Down
+            gp.neighbors[3] = (i<1000-1) ? &grid[i+1][j]: nullptr; //Down
+            allNodes[i*1000 + j] = &gp;
         };
     };
-    for (int j = 0; j< widthSteps;j++) {
-        node& gp = grid[heightSteps-1][j];
-        gp.neighbors[0] = (j>0) ? &grid[heightSteps-1][j-1]:&grid[heightSteps-1][widthSteps-1]; //Left
-        gp.neighbors[1] = (j<widthSteps-1) ? &grid[heightSteps-1][j+1]:&grid[heightSteps-1][0]; //Right
-        gp.neighbors[2] = &grid[heightSteps-2][j];
+    for (int j = 0; j< 1000;j++) {
+        node& gp = grid[1000-1][j];
+        gp.neighbors[0] = (j>0) ? &grid[1000-1][j-1]:&grid[1000-1][1000-1]; //Left
+        gp.neighbors[1] = (j<1000-1) ? &grid[1000-1][j+1]:&grid[1000-1][0]; //Right
+        gp.neighbors[2] = &grid[1000-2][j];
         gp.neighbors[3] = &bottom; //Down
+        allNodes[(1000-1)*1000 + j] = &gp;
         
     }
 
@@ -168,62 +46,71 @@ void gridField::buildGrid(int widthSteps, int heightSteps) {
 
 
 void gridField::init(config modelConfig) {
+
     
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::normal_distribution<> dist(0.0,50);
-    buildGrid(modelConfig.steps[0],modelConfig.steps[1]);
+
+    buildGrid();
     top.grainPhases = {};
     top.phase = 0.00;
+    top.exists = 0;
     bottom.grainPhases = {};
     bottom.phase = 1.00;
+    bottom.exists = 0;
     numGrains = 0;
 
-    for (int ik = 0; ik < modelConfig.steps[0]; ik++) {
-        for (int jk = 0; jk < modelConfig.steps[1]; jk++) {
-            grid[ik][jk].temp = modelConfig.startTemp +dist(gen);
+    for (int ik = 0; ik < 1000; ik++) {
+        for (int jk = 0; jk < 1000; jk++) {
+            grid[ik][jk].temp = modelConfig.startTemp;
             grid[ik][jk].phase = 0.0;
             grid[ik][jk].particleComp = modelConfig.particleVolFraction; 
+            grid[ik][jk].exists = 1;
+            grid[ik][jk].grainsHere = 0;
+            grid[ik][jk].grainPhases = {0,0,0,0,0,0,0,0,0};
+            grid[ik][jk].activeGrains = {0,0,0,0,0,0,0,0,0};
         };
     }
 
 }
 
 
-void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
+void gridField::addGrain(node* nucleus) {
     
     numGrains = numGrains + 1;
     std::cout << "There are now "<<numGrains << "Grains\n";
     std::random_device rd;
     std::mt19937 gen(rd());
     std::normal_distribution<> dist(45,45);
-
-    for (int i = 0; i < modelConf.steps[0]; i++) {
-        for (int j = 0; j < modelConf.steps[1]; j++) {
-            grid[i][j].grainPhases.push_back(0.0);
-        }
-    }
-    top.grainPhases.push_back(0.0);
-    bottom.grainPhases.push_back(0.0);
-
-    grid[nucleus[0]][nucleus[1]].grainPhases[numGrains-1] = 1;
-    grid[nucleus[0]][nucleus[1]].phase = 1;
-    grid[nucleus[0]][nucleus[1]].activeGrains.push_back(numGrains-1);
-    grid[nucleus[0]][nucleus[1]].neighbors[0]->grainPhases.push_back(numGrains-1);
-    grid[nucleus[0]][nucleus[1]].neighbors[1]->grainPhases.push_back(numGrains-1);
-    grid[nucleus[0]][nucleus[1]].neighbors[2]->grainPhases.push_back(numGrains-1);
-    grid[nucleus[0]][nucleus[1]].neighbors[3]->grainPhases.push_back(numGrains-1);
-    grid[nucleus[0]+1][nucleus[1]+1].grainPhases.push_back(numGrains-1);
-    grid[nucleus[0]+1][nucleus[1]-1].grainPhases.push_back(numGrains-1);
-    grid[nucleus[0]-1][nucleus[1]+1].grainPhases.push_back(numGrains-1);
-    grid[nucleus[0]-1][nucleus[1]-1].grainPhases.push_back(numGrains-1);
-
-    //std::cout << "hi";
     eulerAngles tempRots = {dist(gen),dist(gen),dist(gen)};
-    ////std::cout << tempRots.theta1;
-    orientations.push_back(tempRots);
-    //std::cout << "Hi";
+    // Initialize the grain at the nucleus location
+    nucleus->grainsHere = nucleus->grainsHere + 1;
+    nucleus->activeGrains[nucleus->grainsHere-1] = numGrains-1;
+    nucleus->grainPhases[nucleus->grainsHere-1] = 1;
+    nucleus->phase = 1;
+    nucleus->orientations[nucleus->grainsHere-1] = tempRots;
+
+    nucleus->neighbors[0]->grainsHere = nucleus->neighbors[0]->grainsHere + 1;
+    nucleus->neighbors[0]->activeGrains[nucleus->neighbors[0]->grainsHere-1] = numGrains-1;
+    nucleus->neighbors[0]->orientations[nucleus->neighbors[0]->grainsHere-1] = tempRots;
+    nucleus->neighbors[1]->grainsHere = nucleus->neighbors[1]->grainsHere + 1;
+    nucleus->neighbors[1]->activeGrains[nucleus->neighbors[1]->grainsHere-1] = numGrains-1;
+    nucleus->neighbors[1]->orientations[nucleus->neighbors[1]->grainsHere-1] = tempRots;
+
+
+
+
+    if (nucleus->neighbors[2]->exists != 0) {
+        nucleus->neighbors[2]->grainsHere = nucleus->neighbors[2]->grainsHere + 1;
+        nucleus->neighbors[2]->activeGrains[nucleus->neighbors[2]->grainsHere-1] = numGrains-1;
+        nucleus->neighbors[2]->orientations[nucleus->neighbors[2]->grainsHere-1] = tempRots;
+    }
+    if (nucleus->neighbors[3]->exists != 0) {
+        nucleus->neighbors[3]->grainsHere = nucleus->neighbors[3]->grainsHere + 1;
+        nucleus->neighbors[3]->activeGrains[nucleus->neighbors[3]->grainsHere-1] = numGrains-1;
+        nucleus->neighbors[3]->orientations[nucleus->neighbors[3]->grainsHere-1] = tempRots;
+    }
+
+
 
 }
 
@@ -232,126 +119,134 @@ void gridField::addGrain(std::vector<int> nucleus,config modelConf) {
 
 
 void gridField::update(
-    std::vector<std::vector<double>> &phaseDiffEn,
-    std::vector<std::vector<double>> &tempGrad,
-    std::vector<std::vector<std::vector<double>>> &grainDiffEn,
-    std::vector<std::vector<double>> &tempPartComp,
-    config &modelConf,
-    int i_start, int i_end, int j_start, int j_end
+    std::array<double,1000000> &phaseDiffEn,
+    std::array<double,1000000> &tempGrad,
+    std::array<std::array<double,9>,1000000> &grainDiffEn,
+    std::array<double,1000000> &tempPartComp
 ) {
     //std::cout << "\n\n\nStart Update:\n"; 
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> prob_dist(0.0, 1.0);
     bool flip;
-    for (int i = i_start; i < i_end; i++) {
-        for (int j = j_start; j < j_end; j++) {
+    bool grainExists = 0;
 
-            grid[i][j].temp = tempGrad[i][j];
-            grid[i][j].phase = grid[i][j].phase - modelConf.dt /modelConf.cellArea * phaseDiffEn[i][j];
-            grid[i][j].particleComp = grid[i][j].particleComp - ((1/modelConf.cellArea)*modelConf.dt*(1-grid[i][j].phase)*tempPartComp[i][j]);
-
-            for (int g = 0; g < grid[i][j].activeGrains.size(); g++) {
-                //std::cout << "Updating Grain " << grid[i][j].activeGrains[g] << " at Node (" << i << "," << j << ") With Energy:" << (0.7e11*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]) << std::endl;
-                grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = grid[i][j].grainPhases[grid[i][j].activeGrains[g]] - (1e15*modelConf.dt/modelConf.cellArea*grainDiffEn[i][j][grid[i][j].activeGrains[g]]);
-
-            }
-
-
+    #pragma omp parallel for
+    for (int ptr = 0; ptr < 1000000; ptr++) {
+        allNodes[ptr]->temp = tempGrad[ptr];
+        allNodes[ptr]->phase = allNodes[ptr]->phase - mConfig.dt /mConfig.cellArea * phaseDiffEn[ptr];
+        allNodes[ptr]->particleComp = allNodes[ptr]->particleComp - ((1/mConfig.cellArea)*mConfig.dt*(1-allNodes[ptr]->phase)*tempPartComp[ptr]);
+        for (int g = 0; g < 9; g++) {
+            allNodes[ptr]->grainPhases[g] = allNodes[ptr]->grainPhases[g] - (1e15*mConfig.dt/mConfig.cellArea*grainDiffEn[ptr][g]);
         }
+
     }
-    modelConf.basePlateTemp-=modelConf.coolingRate;
+
+
+    
+  
     //std::cout << "Starting Grain Activation Update" << std::endl;   
 
  
 
 
-    for (int i = i_start; i < i_end; i++) {
-        for (int j = j_start; j < j_end; j++) {
-            if (grid[i][j].phase > 1) {
-                grid[i][j].phase = 1;
+    for (int ptr = 0; ptr < 1000000; ptr++) {
+
+            if (allNodes[ptr]->phase > 1) {
+                allNodes[ptr]->phase = 1;
             }
-            if (grid[i][j].phase < 0) {
-                grid[i][j].phase = 0;
+            if (allNodes[ptr]->phase < 0) {
+                allNodes[ptr]->phase = 0;
             }
-            for (int g = 0; g < grid[i][j].activeGrains.size(); g++) {
+            for (int g = 0; g < allNodes[ptr]->grainsHere; g++) {
                 //std::cout << "Grain Activation Update: (" << i << "," << j << ") Grain " << grid[i][j].activeGrains[g] << " Phase: " << grid[i][j].grainPhases[grid[i][j].activeGrains[g]] << std::endl;
-                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] >= 1) {
-                    grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = 1;
+                if (allNodes[ptr]->grainPhases[allNodes[ptr]->activeGrains[g]] >= 1) {
+                    allNodes[ptr]->grainPhases[allNodes[ptr]->activeGrains[g]] = 1;
                 }
-                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] < 0) {
-                    grid[i][j].grainPhases[grid[i][j].activeGrains[g]] = 0;
+                if (allNodes[ptr]->grainPhases[g] < 0) {
+                        allNodes[ptr]->grainPhases[g] = 0;
                 }
-                if (grid[i][j].grainPhases[grid[i][j].activeGrains[g]] > 0.000000001) {
-                    if (grid[i][j].neighbors[0] != nullptr) {
+                if (allNodes[ptr]->grainPhases[g] > 0.000000001) {
+                    if (allNodes[ptr]->neighbors[0]->exists != 0) {
                         flip = 0;
-                        for (int rg = 0; rg < grid[i][j].neighbors[0]->activeGrains.size(); rg++) {
-                            if (grid[i][j].neighbors[0]->activeGrains[rg] == grid[i][j].activeGrains[g]) {
+                        for (int rg = 0; rg < allNodes[ptr]->neighbors[0]->grainsHere; rg++) {
+                            if (allNodes[ptr]->neighbors[0]->activeGrains[rg] == allNodes[ptr]->activeGrains[g]) {
                                 flip = 1;   
                             
                             }
                         }
                         if (flip == 0) {
-                            grid[i][j].neighbors[0]->activeGrains.push_back(grid[i][j].activeGrains[g]);
+
+                            allNodes[ptr]->neighbors[0]->grainsHere = allNodes[ptr]->neighbors[0]->grainsHere + 1;
+                            allNodes[ptr]->neighbors[0]->activeGrains[allNodes[ptr]->neighbors[0]->grainsHere-1] = allNodes[ptr]->activeGrains[g];
+                            allNodes[ptr]->neighbors[0]->orientations[allNodes[ptr]->neighbors[0]->grainsHere-1] = allNodes[ptr]->orientations[g];
                         }
                     }
 
-                    if (grid[i][j].neighbors[1] != nullptr) {
+                    if (allNodes[ptr]->neighbors[1]->exists != 0) {
                         flip = 0;
-                        for (int rg = 0; rg < grid[i][j].neighbors[1]->activeGrains.size(); rg++) {
+                        for (int rg = 0; rg < allNodes[ptr]->neighbors[1]->grainsHere; rg++) {
+                            if (allNodes[ptr]->neighbors[1]->activeGrains[rg] == allNodes[ptr]->activeGrains[g]) {
+                                flip = 1;   
                             
-                            if (grid[i][j].neighbors[1]->activeGrains[rg] == grid[i][j].activeGrains[g]) {
-                                flip = 1;
                             }
+                        }
+                        if (flip == 0) {
+
+                            allNodes[ptr]->neighbors[1]->grainsHere = allNodes[ptr]->neighbors[1]->grainsHere + 1;
+                            allNodes[ptr]->neighbors[1]->activeGrains[allNodes[ptr]->neighbors[1]->grainsHere-1] = allNodes[ptr]->activeGrains[g];
+                            allNodes[ptr]->neighbors[1]->orientations[allNodes[ptr]->neighbors[1]->grainsHere-1] = allNodes[ptr]->orientations[g];
+                        }
+                    }
+                    if (allNodes[ptr]->neighbors[2]->exists != 0) {
+                        flip = 0;
+                        for (int rg = 0; rg < allNodes[ptr]->neighbors[2]->grainsHere; rg++) {
+                            if (allNodes[ptr]->neighbors[2]->activeGrains[rg] == allNodes[ptr]->activeGrains[g]) {
+                                flip = 1;   
                             
-                        }
-                        if (flip == 0) {
-                            grid[i][j].neighbors[1]->activeGrains.push_back(grid[i][j].activeGrains[g]);
-                        }
-                    }
-
-                    if (grid[i][j].neighbors[2] != nullptr) {
-                        flip = 0;
-                        for (int rg = 0; rg < grid[i][j].neighbors[2]->activeGrains.size(); rg++) {
-                            if (grid[i][j].neighbors[2]->activeGrains[rg] == grid[i][j].activeGrains[g]) {
-                                flip = 1;
                             }
                         }
                         if (flip == 0) {
-                            grid[i][j].neighbors[2]->activeGrains.push_back(grid[i][j].activeGrains[g]);
+
+                            allNodes[ptr]->neighbors[2]->grainsHere = allNodes[ptr]->neighbors[2]->grainsHere + 1;
+                            allNodes[ptr]->neighbors[2]->activeGrains[allNodes[ptr]->neighbors[2]->grainsHere-1] = allNodes[ptr]->activeGrains[g];
+                            allNodes[ptr]->neighbors[2]->orientations[allNodes[ptr]->neighbors[2]->grainsHere-1] = allNodes[ptr]->orientations[g];
                         }
                     }
-
-                    if (grid[i][j].neighbors[3] != nullptr) {
+                    if (allNodes[ptr]->neighbors[3]->exists != 0) {
                         flip = 0;
-                        for (int rg = 0; rg < grid[i][j].neighbors[3]->activeGrains.size(); rg++) {
-                            if (grid[i][j].neighbors[3]->activeGrains[rg] == grid[i][j].activeGrains[g]) {
-                                flip = 1;
+                        for (int rg = 0; rg < allNodes[ptr]->neighbors[3]->grainsHere; rg++) {
+                            if (allNodes[ptr]->neighbors[3]->activeGrains[rg] == allNodes[ptr]->activeGrains[g]) {
+                                flip = 1;   
+                            
                             }
                         }
                         if (flip == 0) {
-                            grid[i][j].neighbors[3]->activeGrains.push_back(grid[i][j].activeGrains[g]);
+
+                            allNodes[ptr]->neighbors[3]->grainsHere = allNodes[ptr]->neighbors[3]->grainsHere + 1;
+                            allNodes[ptr]->neighbors[3]->activeGrains[allNodes[ptr]->neighbors[3]->grainsHere-1] = allNodes[ptr]->activeGrains[g];
+                            allNodes[ptr]->neighbors[3]->orientations[allNodes[ptr]->neighbors[3]->grainsHere-1] = allNodes[ptr]->orientations[g];
                         }
-                    }
                 }
             }
         
 
 
 
-            if (i > 0 && i < modelConf.steps[0]-1 && j > 0 && j < modelConf.steps[1]-1) {
-                if (grid[i][j].temp < (modelConf.meltTemp)) {
-                    bool grainExists = false;
-                    if (grid[i][j].activeGrains.size() > 0||grid[i][j].phase >0.0001||grid[i][j].neighbors[0]->activeGrains.size()>0||grid[i][j].neighbors[1]->activeGrains.size()>0||grid[i][j].neighbors[2]->activeGrains.size()>0||grid[i][j].neighbors[3]->activeGrains.size()>0||grid[i+1][j+1].activeGrains.size()>0||grid[i+1][j-1].activeGrains.size()>0||grid[i-1][j+1].activeGrains.size()>0||grid[i-1][j-1].activeGrains.size()>0) {
-                        grainExists = true;
-                    }
-                    // 0.01% chance of nucleation
-                    if (!grainExists && prob_dist(gen) <(1-exp(modelConf.dx*modelConf.dx*modelConf.dt*grid[i][j].calcNucRate(modelConf)*-1))) { 
-                        std::lock_guard<std::mutex> lock(grain_mutex);
-                        addGrain({i,j},modelConf);
-                    }
+            
+            if (allNodes[ptr]->temp < (mConfig.meltTemp)) {
+                grainExists = 0;
+                if (allNodes[ptr]->grainsHere > 0 || allNodes[ptr]->phase > 0.000000001 || allNodes[ptr]->neighbors[0]->grainsHere > 0 || allNodes[ptr]->neighbors[1]->grainsHere > 0 || allNodes[ptr]->neighbors[2]->grainsHere > 0 || allNodes[ptr]->neighbors[3]->grainsHere > 0) {
+                    grainExists = 1;
+                }
+
+
+                if (!grainExists && prob_dist(gen) <(1-exp(mConfig.dx*mConfig.dx*mConfig.dt*allNodes[ptr]->calcNucRate(mConfig)*-1))) { 
+                    std::lock_guard<std::mutex> lock(grain_mutex);
+                    addGrain(allNodes[ptr]);
                 }
             }
+            
         }
     }
 
@@ -360,26 +255,27 @@ void gridField::update(
 
 
 
-std::vector<std::vector<double>> updateTemp(double tGrad, double tRate, int timeStep, double dx, double dt, int iSteps, int jSteps, double startTemp, double minTemp) {
+std::array<double,1000000> updateTemp(double tGrad, double tRate, int timeStep, double dx, double dt, int iSteps, int jSteps, double startTemp, double minTemp) {
     //std::cout << timeStep << std::endl;
     //std::cout << startTemp << std::endl;
     double tempGrad = tGrad;
     double cRate = tRate;
     //std::cout << "Cooling Rate: " << cRate << std::endl;
-    std::vector<std::vector<double>> newTemp(iSteps, std::vector<double>(jSteps));
+    std::array<double,1000000> newTemp;
     double startH = cRate*timeStep*dt;
     //std::cout << "Start Height: " << startH << std::endl;
    // std::cout << startH << std::endl;
+    #pragma omp parallel for
     for (int i = 0; i < iSteps; i++) {
 
         for (int j = 0; j < jSteps; j++) {
             double height = i * dx;
             if (height > startH) {
-                newTemp[i][j] = startTemp;
+                newTemp[1000*i+j] = startTemp;
             } else {
                 double tempDrop = tempGrad * (startH-height);
                 //std::cout << tempDrop << std::endl;
-                if (startTemp-tempDrop > minTemp) newTemp[i][j] = startTemp - tempDrop; else newTemp[i][j] = minTemp;
+                if (startTemp-tempDrop > minTemp) newTemp[1000*i+j] = startTemp - tempDrop; else newTemp[1000*i+j] = minTemp;
                 //  std::cout << newTemp[i][j] << std::endl;
             };
         }

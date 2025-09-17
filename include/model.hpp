@@ -10,18 +10,14 @@ std::vector<std::vector<double>> calcFreeEnergy(gridField field,config modelConf
 
 double compOtherGrains(int notIndex,node Node, int numGrains);
 
-std::vector<std::vector<std::vector<double>>> calcGrainDiffEnergy(gridField field, config modelConfig);
+std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig);
 
-std::vector<std::vector<double>> calcPhaseDiffEnergy(gridField field, config modelConfig);
+double calcPhaseDiffEnergy(node* nd, config modelConfig);
 
-std::vector<double> eulerRotate(eulerAngles orient, std::vector<double> rotatedVector);
+std::array<double,3> eulerRotate(eulerAngles orient, std::array<double,3> rotatedVector);
 
-double dotAngle(std::vector<double> vec1, std::vector<double> vec2);
+double dotAngle(std::array<double,3> vec1, std::array<double,3> vec2);
+double calcParticleCompDiff(node* nd, config& modelConfig);
 
-std::vector<std::vector<double>> calcTempDiff(gridField& field, const config& modelConfig);
-
-void calcParticleCompDiffRegion(gridField& field, config& modelConfig, 
-    std::vector<std::vector<double>>& tempPartComp,
-    int i_start, int i_end, int j_start, int j_end);
 
 inline double getPotentialWithLaplacian(gridField& field, config& modelConfig, int i, int j);
