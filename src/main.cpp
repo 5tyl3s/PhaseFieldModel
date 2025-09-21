@@ -66,10 +66,10 @@ int main() {
     if (!output_file1.is_open()) {
         std::cerr << "Error: Could not open file " << fileNameTemp << std::endl;
     }
-    for (int i=0;i < configData.steps[0];i++) {
-        for (int j=0;j < configData.steps[1];j++) {
+    for (int i=0;i < 1000;i++) {
+        for (int j=0;j < 1000;j++) {
             output_file1 << globalField.grid[i][j].temp;
-            if (j < configData.steps[1] - 1) {
+            if (j < 1000 - 1) {
                 output_file1 << ',';
             }
         }
@@ -81,10 +81,10 @@ int main() {
     if (!output_file2.is_open()) {
         std::cerr << "Error: Could not open file " << fileNamePhase << std::endl;
     }
-    for (int i=0;i < configData.steps[0];i++) {
-        for (int j=0;j < configData.steps[1];j++) {
+    for (int i=0;i < 1000;i++) {
+        for (int j=0;j < 1000;j++) {
             output_file2  << globalField.grid[i][j].phase;
-            if (j < configData.steps[1] - 1) {
+            if (j < 1000 - 1) {
                 output_file2  << ',';
             }
         }
@@ -98,11 +98,11 @@ int main() {
     double tempOut = 0;
     int gNum;
     
-    for (int i=0;i < configData.steps[0];i++) {
-        for (int j=0;j < configData.steps[1];j++) { 
+    for (int i=0;i < 1000;i++) {
+        for (int j=0;j < 1000;j++) { 
             gNum = 0;
             tempOut = 0;
-            for (int g = 0; g < globalField.grid[i][j].activeGrains.size(); g++) {
+            for (int g = 0; g < 9; g++) {
                 if (globalField.grid[i][j].grainPhases[globalField.grid[i][j].activeGrains[g]] > tempOut) {
                     tempOut = globalField.grid[i][j].grainPhases[globalField.grid[i][j].activeGrains[g]];
                     gNum = globalField.grid[i][j].activeGrains[g]+1;
@@ -110,7 +110,7 @@ int main() {
                 
             }
             output_file3 << gNum;
-            if (j < configData.steps[1] - 1) {
+            if (j < 1000 - 1) {
                 output_file3 << ',';
             }
             
@@ -126,10 +126,10 @@ int main() {
     if (!output_file4.is_open()) {
         std::cerr << "Error: Could not open file " << fileNamePart << std::endl;
     }
-    for (int i=0;i < configData.steps[0];i++) {
-        for (int j=0;j < configData.steps[1];j++) {
+    for (int i=0;i < 1000;i++) {
+        for (int j=0;j < 1000;j++) {
             output_file4  << globalField.grid[i][j].particleComp;
-            if (j < configData.steps[1] - 1) {
+            if (j < 1000 - 1) {
                 output_file4  << ',';
             }
         }

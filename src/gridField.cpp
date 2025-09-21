@@ -61,7 +61,7 @@ void gridField::init(config modelConfig) {
 
     for (int ik = 0; ik < 1000; ik++) {
         for (int jk = 0; jk < 1000; jk++) {
-            grid[ik][jk].temp = modelConfig.startTemp;
+            
             grid[ik][jk].phase = 0.0;
             grid[ik][jk].particleComp = modelConfig.particleVolFraction; 
             grid[ik][jk].exists = 1;
