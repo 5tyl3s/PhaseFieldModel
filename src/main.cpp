@@ -2,6 +2,7 @@
 #include "model.hpp"
 #include "modelStartup.hpp"
 #include "importConfig.hpp"
+#include "gridField.hpp"
 #include <omp.h>
 #include <direct.h> // For _getcwd on Windows
 
@@ -10,54 +11,42 @@
 #include <string>
 #include <thread>
 #include <chrono>
-
-// These functions must be implemented to fill only the specified region of the output array
+std::array<double,1000000> newTemp;
+std::array<std::array<double,9>,1000000> grainDiffEn;
+std::array<double,1000000> phaseDiffEn;
+std::array<double,1000000>  tempGrad;
+std::array<double,1000000> tempPartComp;
 int main() {
-    std::cout << "Program started" << std::endl << std::flush;
-    
-    // Print working directory
-    char cwd[256];
-    if (_getcwd(cwd, sizeof(cwd)) != NULL) {
-        std::cout << "Current working directory: " << cwd << std::endl << std::flush;
-    } else {
-        std::cerr << "Could not get current working directory" << std::endl << std::flush;
-    }
-
-    std::cout << "About to start PhaseField Sim..." << std::endl << std::flush;
-    auto start = std::chrono::steady_clock::now();
-    
+    std::cout << "Hello, World!" << std::endl;
     std::cout << "Attempting to read config file..." << std::endl << std::flush;
     config configData = inputConfig("config/config.txt");
     if (configData.success == 0) {
         std::cerr << "Config Failed to load from: config/config.txt" << std::endl << std::flush;
         return 1;
     }
-    std::cout << "Config loaded successfully" << std::endl << std::flush;
 
-
-
-    gridField model;
-    model.init(configData);
-    std::array<std::array<double,9>,1000000> grainDiffEn;
-    std::array<double,1000000> phaseDiffEn;
-    std::array<double,1000000>  tempGrad;
-    std::array<double,1000000> tempPartComp;
-    node* nd;
-
-
+    //gridField model2;
+    globalField.init(configData);
+    char cwd2[256];
+    if (_getcwd(cwd2, sizeof(cwd2)) != NULL) {
+        std::cout << "Current working directory: " << cwd2 << std::endl << std::flush;
+    } else {
+        std::cerr << "Could not get current working directory" << std::endl << std::flush;
+    }    std::cout << "About to start PhaseField Sim..." << std::endl << std::flush;
+    auto start1 = std::chrono::steady_clock::now();
+    node* nd2;
 
     for (int t = 0; t < configData.timeSteps; t++) {
-        if (t%100 == 0) std::cout << t << "/" << configData.timeSteps << std::endl;
+        if (t%10 != 0) std::cout << t << "/" << configData.timeSteps << std::endl;
         #pragma omp parallel for
         for (int node = 0; node < 1000000; node++) {
-            nd = model.allNodes[node];
-
-    
-            phaseDiffEn[node] = calcPhaseDiffEnergy(nd, configData);
-            tempPartComp[node] = calcParticleCompDiff(nd, configData);
-            grainDiffEn[node] = calcGrainDiffEnergy(nd, configData);
+            nd2 = globalField.allNodes[node];
+            tempGrad[node] = calcTemp(nd2,configData,t);
+            phaseDiffEn[node] = calcPhaseDiffEnergy(nd2, configData);
+            tempPartComp[node] = calcParticleCompDiff(nd2, configData);
+            grainDiffEn[node] = calcGrainDiffEnergy(nd2, configData);
         }
-        tempGrad = updateTemp(configData.tGrad, configData.coolingRate, t, configData.dx, configData.dt, configData.steps[0], configData.steps[1], configData.startTemp, configData.minTemp);
+        
 
         
 
@@ -67,9 +56,10 @@ int main() {
         //std::cout << "Threads Joined" << std::endl;
 
         // Update the entire grid in a single call
-        model.update(phaseDiffEn, tempGrad, grainDiffEn, tempPartComp);
+        globalField.update(phaseDiffEn, grainDiffEn, tempPartComp, tempGrad);
 
     }
+
 
     std::string fileNameTemp = "TempGrid.csv";
     std::ofstream output_file1(fileNameTemp);
@@ -78,7 +68,7 @@ int main() {
     }
     for (int i=0;i < configData.steps[0];i++) {
         for (int j=0;j < configData.steps[1];j++) {
-            output_file1 << model.grid[i][j].temp;
+            output_file1 << globalField.grid[i][j].temp;
             if (j < configData.steps[1] - 1) {
                 output_file1 << ',';
             }
@@ -93,7 +83,7 @@ int main() {
     }
     for (int i=0;i < configData.steps[0];i++) {
         for (int j=0;j < configData.steps[1];j++) {
-            output_file2  << model.grid[i][j].phase;
+            output_file2  << globalField.grid[i][j].phase;
             if (j < configData.steps[1] - 1) {
                 output_file2  << ',';
             }
@@ -112,10 +102,10 @@ int main() {
         for (int j=0;j < configData.steps[1];j++) { 
             gNum = 0;
             tempOut = 0;
-            for (int g = 0; g < model.grid[i][j].activeGrains.size(); g++) {
-                if (model.grid[i][j].grainPhases[model.grid[i][j].activeGrains[g]] > tempOut) {
-                    tempOut = model.grid[i][j].grainPhases[model.grid[i][j].activeGrains[g]];
-                    gNum = model.grid[i][j].activeGrains[g]+1;
+            for (int g = 0; g < globalField.grid[i][j].activeGrains.size(); g++) {
+                if (globalField.grid[i][j].grainPhases[globalField.grid[i][j].activeGrains[g]] > tempOut) {
+                    tempOut = globalField.grid[i][j].grainPhases[globalField.grid[i][j].activeGrains[g]];
+                    gNum = globalField.grid[i][j].activeGrains[g]+1;
                 }
                 
             }
@@ -138,7 +128,7 @@ int main() {
     }
     for (int i=0;i < configData.steps[0];i++) {
         for (int j=0;j < configData.steps[1];j++) {
-            output_file4  << model.grid[i][j].particleComp;
+            output_file4  << globalField.grid[i][j].particleComp;
             if (j < configData.steps[1] - 1) {
                 output_file4  << ',';
             }
@@ -149,7 +139,7 @@ int main() {
     output_file4   .close();
 
     
-    std::cout << "Elapsed(ms)=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() << std::endl;
+    std::cout << "Elapsed(ms)=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start1).count() << std::endl;
     return 0;
 
 }

@@ -153,6 +153,9 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     double diffFree = eLoc + eGrad + nd->particleComp*nd->particleComp*2*nd->phase*mConfig.particleSolidIntEnergy; ;
     return diffFree;
 }
+
+
+
 std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
     std::array<double,9> diffFree;
     std::array<double,4> grainGradVals {0,0,0,0};
@@ -194,7 +197,9 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
 }
 
 
-
+double calcTemp(node* nd, config& modelConfig, int t) {
+    return modelConfig.startTemp + (nd->heightPos*modelConfig.tGrad*modelConfig.dx) - t*modelConfig.coolingRate*modelConfig.dt;
+}
 
 double calcParticleCompDiff(node* nd, config& modelConfig) {
     double part = nd->particleComp;
