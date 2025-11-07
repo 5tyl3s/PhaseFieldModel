@@ -52,12 +52,11 @@ double calcGrainBoundaryEnergy(eulerAngles orient, std::vector<double> gradient)
         if (angle111<angle110) {
             return 2.962;
         }
-    } else {
-        return 3.192;
-    }
+    } 
+    return 3.192;
     std::cerr << gradNormal[0] << " " << gradNormal[1] << " " << gradNormal[2] << std::endl;
-
-    std::cerr << surfPlaneVec[0] << surfPlaneVec[1] << surfPlaneVec[2] << std::endl;
+    std::cerr << surfPlaneVec[0] <<" " <<  surfPlaneVec[1] << " " << surfPlaneVec[2] << std::endl;
+    std::cerr << orient.theta1 << " " << orient.phi << " " << orient.theta2 << std::endl;
     std::cerr << angle110 << std::endl;
     std::cerr << angle111 << std::endl;
     std::cerr << angle100 << std::endl;
@@ -123,11 +122,11 @@ double dotAngle(std::array<double,3> vec1, std::array<double,3> vec2) {
     //std::cout << "Acos of this: " << (adotb/(mag1*mag2)) << std::endl;
     double angle = acos(adotb/(mag1*mag2));
 
-    while (angle > 90) {
-        angle = angle - 90;
+    while (angle > (3.14/2)) {
+        angle = angle - (3.14/2);
     }
     while (angle < 0) {
-        angle = angle + 90;
+        angle = angle + (3.14/2);
     }
     //std::cout << angle << std::endl;
     return angle;
@@ -135,6 +134,7 @@ double dotAngle(std::array<double,3> vec1, std::array<double,3> vec2) {
 }
 
 double calcPhaseDiffEnergy(node* nd, config mConfig) {
+    //std::cout << "Calculating Phase Diff Energy..." << std::endl;
     double pha = nd->phase;
     double part = nd->particleComp;
     double liq = ifLiq(nd->temp, mConfig.meltTemp);
@@ -143,7 +143,7 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     );
     double grainSum = 0.0;
     for (int g = 0; g < 9; g++) {
-        grainSum += nd->exists*nd->grainPhases[nd->activeGrains[g]] * nd->grainPhases[nd->activeGrains[g]];
+        grainSum += nd->exists*nd->grainPhases[g] * nd->grainPhases[g];
     }
     eLoc += mConfig.grainPreCo * (-2 * (1 - pha) * grainSum) + (2*pha*part*part*mConfig.particleSolidIntEnergy+(-2+2*pha)*(part)*(part)*mConfig.particleLiquidIntEnergy);
     double eGrad = (nd->neighbors[0]->phase +
@@ -151,7 +151,7 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
              nd->neighbors[2]->phase +
              nd->neighbors[3]->phase - (nd->neighbors[0]->exists + nd->neighbors[1]->exists + nd->neighbors[2]->exists + nd->neighbors[3]->exists) * pha) * mConfig.phaseGradCo;
     double diffFree = eLoc + eGrad + nd->particleComp*nd->particleComp*2*nd->phase*mConfig.particleSolidIntEnergy; ;
-    std::cout << "Phase Diff Energy: " << diffFree << std::endl;
+    //std::cout << "Phase Diff Energy: " << diffFree << std::endl;
     return diffFree;
 
 }
@@ -159,22 +159,27 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
 
 
 std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
+    //std::cout << "Calculating Grain Diff Energy..." << std::endl;
     std::array<double,9> diffFree;
     std::array<double,4> grainGradVals {0,0,0,0};
+    double gra = 0;
+    int activeGrain = 0;
     for (int g = 0; g < 9; g++) {
-        double gra = nd->grainPhases[nd->activeGrains[g]];
+        gra = nd->grainPhases[g];
+       
+        activeGrain = nd->activeGrains[g];
 
         for (int gg = 0; gg < 9; gg++) {
-            if (nd->activeGrains[g] == nd->neighbors[0]->activeGrains[gg]) {
+            if (activeGrain == nd->neighbors[0]->activeGrains[gg]) {
                 grainGradVals[0] = nd->neighbors[0]->grainPhases[gg];
             }
-            if (nd->activeGrains[g] == nd->neighbors[1]->activeGrains[gg]) {
+            if (activeGrain == nd->neighbors[1]->activeGrains[gg]) {
                 grainGradVals[1] = nd->neighbors[1]->grainPhases[gg];
             }
-            if (nd->activeGrains[g] == nd->neighbors[2]->activeGrains[gg]) {
+            if (activeGrain == nd->neighbors[2]->activeGrains[gg]) {
                 grainGradVals[2] = nd->neighbors[2]->grainPhases[gg];
             }
-            if (nd->activeGrains[g] == nd->neighbors[3]->activeGrains[gg]) {
+            if (activeGrain == nd->neighbors[3]->activeGrains[gg]) {
                 grainGradVals[3] = nd->neighbors[3]->grainPhases[gg];
             }
         }
@@ -182,7 +187,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
             grainGradVals[0] + grainGradVals[1] + grainGradVals[2] + grainGradVals[3] -
             (nd->neighbors[0]->exists + nd->neighbors[1]->exists + nd->neighbors[2]->exists + nd->neighbors[3]->exists) * nd->grainPhases[g]) * -1 * mConfig.grainGradCo;
 
-        double comp = sumOtherGrainsSquared(nd->activeGrains[g], *nd, 9);
+        double comp = sumOtherGrainsSquared(/*local slot index*/ g, *nd, 9);
         double solid = 1.0 - ifLiq(nd->temp, mConfig.meltTemp);
 
         double gbEnergy = calcGrainBoundaryEnergy(nd->orientations[g], {
@@ -194,6 +199,11 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
         double grainEnergy = mConfig.grainPreCo * (gra * gra * gra * gra - gra + (1000 / mConfig.cellArea) * gra * comp * gbEnergy * mConfig.grainIntWidth + 2 * gra * solid * solid);
 
         diffFree[g] = mConfig.dt * (grainGrad + grainEnergy);
+        //std::cout << "Grain " << g << " Diff Energy: " << diffFree[g] << std::endl;
+        // treat negative activeGrain as "empty slot"
+        if (activeGrain < 0) {
+             diffFree[g] = 0;
+        }
         
     }
     return diffFree;
@@ -201,15 +211,43 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
 
 
 double calcTemp(node* nd, config& modelConfig, int t) {
+    
     return modelConfig.startTemp + (nd->heightPos*modelConfig.tGrad*modelConfig.dx) - (t*modelConfig.coolingRate*modelConfig.dt);
+    
 }
 
 double calcParticleCompDiff(node* nd, config& modelConfig) {
-    double part = nd->particleComp;
+    // Return chemical potential (mu) for particle composition at this node,
+    // including a simple laplacian term using neighbors.
+    double c = nd->particleComp;
     double pha = nd->phase;
-    double en = 2*part*pha*pha*modelConfig.particleSolidIntEnergy
-    + 2*part*(1-pha)*(1-pha)*modelConfig.particleLiquidIntEnergy;
-    return en;
+
+    // local chemical contribution: derivative of local energy w.r.t c
+    // energy density used previously: 2*c*pha^2*E_s + 2*c*(1-pha)^2*E_l
+    double mu_local = 2.0 * pha * pha * modelConfig.particleSolidIntEnergy
+                    + 2.0 * (1.0 - pha) * (1.0 - pha) * modelConfig.particleLiquidIntEnergy;
+
+    // gradient contribution (simple discrete Laplacian)
+    double sumNeighC = 0.0;
+    int nExist = 0;
+    for (int nb = 0; nb < 4; nb++) {
+        node* nbr = nd->neighbors[nb];
+        if (!nbr) continue;
+        if (nbr->exists == 0) continue; // treat boundary as no-flux
+        sumNeighC += nbr->particleComp;
+        nExist++;
+    }
+
+    double lapC = 0.0;
+    if (nExist > 0) {
+        lapC = (sumNeighC - nExist * c);
+    }
+
+    // coefficient for gradient term (tuneable)
+    const double particleGradCo = 1.0; // tune or move to config
+    mu_local += particleGradCo * lapC;
+
+    return mu_local;
 }
 
 

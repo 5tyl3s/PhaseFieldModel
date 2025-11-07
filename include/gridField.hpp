@@ -2,6 +2,10 @@
 #include <array>
 #include "importConfig.hpp"
 
+// Define grid dimensions in one place. Change these values to the desired grid size.
+constexpr int GRID_ROWS = 1000;
+constexpr int GRID_COLS = 1000;
+constexpr int TOTAL_NODES = GRID_ROWS * GRID_COLS;
 
 struct eulerAngles {
     double theta1;
@@ -29,8 +33,8 @@ struct node {
 
 struct gridField {
     config mConfig;
-    std::array<std::array<node,1000>,1000> grid;
-    std::array<node*,1000000> allNodes;
+    std::array<std::array<node, GRID_COLS>, GRID_ROWS> grid;
+    std::array<node*, TOTAL_NODES> allNodes;
     int numGrains;
     node top;
     node bottom;
@@ -40,10 +44,10 @@ struct gridField {
     void init(config modelConfig);
     void addGrain(node* nucleus);
     void update(
-        std::array<double,1000000> &phaseDiffEn,
-        std::array<std::array<double,9>,1000000> &grainDiffEn,
-        std::array<double,1000000> &tempPartComp,
-        std::array<double,1000000> &tGrad
+        std::array<double, TOTAL_NODES> &phaseDiffEn,
+        std::array<std::array<double,9>, TOTAL_NODES> &grainDiffEn,
+        std::array<double, TOTAL_NODES> &tempPartComp,
+        std::array<double, TOTAL_NODES> &tGrad
     );
 };
 

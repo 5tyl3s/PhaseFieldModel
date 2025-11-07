@@ -48,6 +48,7 @@ config inputConfig(std::string configSource) {
         configOut << "  \"drivingForceIntercept\": 39.842,\n";
         configOut << "  \"diffusionActivationEnergy\": 1.5,\n";
         configOut << "  \"ParticleSolidIntEnergy\": 6.0,\n";
+        configOut << "  \"ParticleLiqIntEnergy\": 3.0,\n";
         configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
 
         configOut << "}\n";
@@ -105,7 +106,7 @@ config inputConfig(std::string configSource) {
     newConfig.diffusionActivationEnergy = j["diffusionActivationEnergy"];
     newConfig.molarMass = j["molarMass"];
     newConfig.particleSolidIntEnergy = j["particleSolidIntEnergy"];
-
+    newConfig.particleLiquidIntEnergy = j["particleLiqIntEnergy"];
 
     newConfig.molarVolume = (newConfig.molarMass) / (newConfig.density*1000);
 

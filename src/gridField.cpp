@@ -8,47 +8,47 @@ std::array<std::array<double,1000>,1000> tempGrid;
 
 void gridField::buildGrid() {
 
-
-    
-    
-    for (int j = 0; j< 1000;j++) {
+    // top row
+    for (int j = 0; j < GRID_COLS; j++) {
         node& gp = grid[0][j];
-        gp.neighbors[0] = (j>0) ? &grid[0][j-1]:&grid[0][1000-1]; //Left
-        gp.neighbors[1] = (j<1000-1) ? &grid[0][j+1]:&grid[0][0]; //Right
-        gp.neighbors[2] =&top;
-        gp.neighbors[3] = &grid[1][j]; //Down
+        gp.neighbors[0] = (j > 0) ? &grid[0][j - 1] : &grid[0][GRID_COLS - 1]; // Left
+        gp.neighbors[1] = (j < GRID_COLS - 1) ? &grid[0][j + 1] : &grid[0][0]; // Right
+        gp.neighbors[2] = &top;
+        gp.neighbors[3] = &grid[1][j]; // Down
         allNodes[j] = &gp;
-        gp.heightPos =0;
-        
+        gp.heightPos = 0;
     }
-    for (int i = 1; i< 1000-1;i++) {
-        for (int j = 0; j < 1000;j++) {
+
+    // interior rows
+    for (int i = 1; i < GRID_ROWS - 1; i++) {
+        for (int j = 0; j < GRID_COLS; j++) {
             node& gp = grid[i][j];
-            gp.neighbors[0] = (j>0) ? &grid[i][j-1]:&grid[i][1000-1]; //Left
-            gp.neighbors[1] = (j<1000-1) ? &grid[i][j+1]:&grid[i][0]; //Right
-            gp.neighbors[2] = (i>0) ? &grid[i-1][j]: nullptr;//up
-            gp.neighbors[3] = (i<1000-1) ? &grid[i+1][j]: nullptr; //Down
-            allNodes[i*1000 + j] = &gp;
+            gp.neighbors[0] = (j > 0) ? &grid[i][j - 1] : &grid[i][GRID_COLS - 1]; // Left
+            gp.neighbors[1] = (j < GRID_COLS - 1) ? &grid[i][j + 1] : &grid[i][0]; // Right
+            gp.neighbors[2] = &grid[i - 1][j]; // Up
+            gp.neighbors[3] = &grid[i + 1][j]; // Down
+            allNodes[i * GRID_COLS + j] = &gp;
             gp.heightPos = i;
-        };
-    };
-    for (int j = 0; j< 1000;j++) {
-        node& gp = grid[1000-1][j];
-        gp.neighbors[0] = (j>0) ? &grid[1000-1][j-1]:&grid[1000-1][1000-1]; //Left
-        gp.neighbors[1] = (j<1000-1) ? &grid[1000-1][j+1]:&grid[1000-1][0]; //Right
-        gp.neighbors[2] = &grid[1000-2][j];
-        gp.neighbors[3] = &bottom; //Down
-        allNodes[(1000-1)*1000 + j] = &gp;
-        gp.heightPos = (1000-1);
+        }
+    }
+
+    // bottom row
+    for (int j = 0; j < GRID_COLS; j++) {
+        node& gp = grid[GRID_ROWS - 1][j];
+        gp.neighbors[0] = (j > 0) ? &grid[GRID_ROWS - 1][j - 1] : &grid[GRID_ROWS - 1][GRID_COLS - 1]; // Left
+        gp.neighbors[1] = (j < GRID_COLS - 1) ? &grid[GRID_ROWS - 1][j + 1] : &grid[GRID_ROWS - 1][0]; // Right
+        gp.neighbors[2] = &grid[GRID_ROWS - 2][j];
+        gp.neighbors[3] = &bottom; // Down
+        allNodes[(GRID_ROWS - 1) * GRID_COLS + j] = &gp;
+        gp.heightPos = (GRID_ROWS - 1);
     }
 
 };
 
-
 void gridField::init(config modelConfig) {
 
-    
-
+    // store config for use in update()
+    mConfig = modelConfig;
 
     buildGrid();
     top.grainPhases = {};
@@ -57,22 +57,23 @@ void gridField::init(config modelConfig) {
     bottom.grainPhases = {};
     bottom.phase = 1.00;
     bottom.exists = 0;
+    // mark slots as empty with -1 (valid grain IDs start at 0)
+    top.activeGrains = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+    bottom.activeGrains = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
     numGrains = 0;
 
-    for (int ik = 0; ik < 1000; ik++) {
-        for (int jk = 0; jk < 1000; jk++) {
-            
+    for (int ik = 0; ik < GRID_ROWS; ik++) {
+        for (int jk = 0; jk < GRID_COLS; jk++) {
             grid[ik][jk].phase = 0.0;
-            grid[ik][jk].particleComp = modelConfig.particleVolFraction; 
+            grid[ik][jk].particleComp = modelConfig.particleVolFraction;
             grid[ik][jk].exists = 1;
             grid[ik][jk].grainsHere = 0;
             grid[ik][jk].grainPhases = {0,0,0,0,0,0,0,0,0};
-            grid[ik][jk].activeGrains = {0,0,0,0,0,0,0,0,0};
+            grid[ik][jk].activeGrains = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+            grid[ik][jk].id = ik * GRID_COLS + jk;
         };
     }
-
 }
-
 
 void gridField::addGrain(node* nucleus) {
     
@@ -119,136 +120,134 @@ void gridField::addGrain(node* nucleus) {
 
 
 void gridField::update(
-    std::array<double,1000000> &phaseDiffEn,
-    std::array<std::array<double,9>,1000000> &grainDiffEn,
-    std::array<double,1000000> &tempPartComp,
-    std::array<double,1000000> &tGrad
+    std::array<double, TOTAL_NODES> &phaseDiffEn,
+    std::array<std::array<double,9>, TOTAL_NODES> &grainDiffEn,
+    std::array<double, TOTAL_NODES> &tempPartComp, // now holds chemical potential μ at each node
+    std::array<double, TOTAL_NODES> &tGrad
 ) {
-    //std::cout << "\n\n\nStart Update:\n"; 
+
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> prob_dist(0.0, 1.0);
     bool flip;
     bool grainExists = 0;
 
-
-    for (int ptr = 0; ptr < 1000000; ptr++) {
-        allNodes[ptr]->temp = tGrad[ptr];
-        allNodes[ptr]->phase = allNodes[ptr]->phase - mConfig.dt /mConfig.cellArea * phaseDiffEn[ptr];
-        allNodes[ptr]->particleComp = allNodes[ptr]->particleComp - ((1/mConfig.cellArea)*mConfig.dt*(1-allNodes[ptr]->phase)*tempPartComp[ptr]);
-        for (int g = 0; g < 9; g++) {
-            allNodes[ptr]->grainPhases[g] = allNodes[ptr]->grainPhases[g] - (1e15*mConfig.dt/mConfig.cellArea*grainDiffEn[ptr][g]);
-        }
+    // use compile-time TOTAL_NODES from header
+    for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
+        // make sure pointer is valid (defensive)
+        node* n = allNodes[ptr];
+        if (!n) continue;
         
 
+        n->temp = tGrad[ptr];
+
+        // update phase
+        n->phase = n->phase - (mConfig.dt / mConfig.cellArea) * phaseDiffEn[ptr];
+
+        // update grain phases
+        for (int g = 0; g < 9; g++) {
+            n->grainPhases[g] = n->grainPhases[g] - (1e15 * mConfig.dt / mConfig.cellArea * grainDiffEn[ptr][g]);
+        }
     }
 
+    // conservative particle composition update using chemical potential array (tempPartComp)
+    // discrete divergence of flux: dC/dt = mobility * laplacian(mu)
+    const double particleMobility = 1e-6; // tune or add to config
+    double dx = mConfig.dx;
+    double denom = (dx * dx);
+    for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
+        node* n = allNodes[ptr];
+        if (!n) continue;
 
-    
-  
-    //std::cout << "Starting Grain Activation Update" << std::endl;   
+        double mu = tempPartComp[ptr];
 
- 
-
-
-    for (int ptr = 0; ptr < 1000000; ptr++) {
-
-            if (allNodes[ptr]->phase > 1) {
-                allNodes[ptr]->phase = 1;
-            }
-            if (allNodes[ptr]->phase < 0) {
-                allNodes[ptr]->phase = 0;
-            }
-            for (int g = 0; g < allNodes[ptr]->grainsHere; g++) {
-                //std::cout << "Grain Activation Update: (" << i << "," << j << ") Grain " << grid[i][j].activeGrains[g] << " Phase: " << grid[i][j].grainPhases[grid[i][j].activeGrains[g]] << std::endl;
-                if (allNodes[ptr]->grainPhases[allNodes[ptr]->activeGrains[g]] >= 1) {
-                    allNodes[ptr]->grainPhases[allNodes[ptr]->activeGrains[g]] = 1;
-                }
-                if (allNodes[ptr]->grainPhases[g] < 0) {
-                        allNodes[ptr]->grainPhases[g] = 0;
-                }
-                if (allNodes[ptr]->grainPhases[g] > 0.000000001) {
-                    if (allNodes[ptr]->neighbors[0]->exists != 0) {
-                        flip = 0;
-                        for (int rg = 0; rg < allNodes[ptr]->neighbors[0]->grainsHere; rg++) {
-                            if (allNodes[ptr]->neighbors[0]->activeGrains[rg] == allNodes[ptr]->activeGrains[g]) {
-                                flip = 1;   
-                            
-                            }
-                        }
-                        if (flip == 0) {
-
-                            allNodes[ptr]->neighbors[0]->grainsHere = allNodes[ptr]->neighbors[0]->grainsHere + 1;
-                            allNodes[ptr]->neighbors[0]->activeGrains[allNodes[ptr]->neighbors[0]->grainsHere-1] = allNodes[ptr]->activeGrains[g];
-                            allNodes[ptr]->neighbors[0]->orientations[allNodes[ptr]->neighbors[0]->grainsHere-1] = allNodes[ptr]->orientations[g];
-                        }
-                    }
-
-                    if (allNodes[ptr]->neighbors[1]->exists != 0) {
-                        flip = 0;
-                        for (int rg = 0; rg < allNodes[ptr]->neighbors[1]->grainsHere; rg++) {
-                            if (allNodes[ptr]->neighbors[1]->activeGrains[rg] == allNodes[ptr]->activeGrains[g]) {
-                                flip = 1;   
-                            
-                            }
-                        }
-                        if (flip == 0) {
-
-                            allNodes[ptr]->neighbors[1]->grainsHere = allNodes[ptr]->neighbors[1]->grainsHere + 1;
-                            allNodes[ptr]->neighbors[1]->activeGrains[allNodes[ptr]->neighbors[1]->grainsHere-1] = allNodes[ptr]->activeGrains[g];
-                            allNodes[ptr]->neighbors[1]->orientations[allNodes[ptr]->neighbors[1]->grainsHere-1] = allNodes[ptr]->orientations[g];
-                        }
-                    }
-                    if (allNodes[ptr]->neighbors[2]->exists != 0) {
-                        flip = 0;
-                        for (int rg = 0; rg < allNodes[ptr]->neighbors[2]->grainsHere; rg++) {
-                            if (allNodes[ptr]->neighbors[2]->activeGrains[rg] == allNodes[ptr]->activeGrains[g]) {
-                                flip = 1;   
-                            
-                            }
-                        }
-                        if (flip == 0) {
-
-                            allNodes[ptr]->neighbors[2]->grainsHere = allNodes[ptr]->neighbors[2]->grainsHere + 1;
-                            allNodes[ptr]->neighbors[2]->activeGrains[allNodes[ptr]->neighbors[2]->grainsHere-1] = allNodes[ptr]->activeGrains[g];
-                            allNodes[ptr]->neighbors[2]->orientations[allNodes[ptr]->neighbors[2]->grainsHere-1] = allNodes[ptr]->orientations[g];
-                        }
-                    }
-                    if (allNodes[ptr]->neighbors[3]->exists != 0) {
-                        flip = 0;
-                        for (int rg = 0; rg < allNodes[ptr]->neighbors[3]->grainsHere; rg++) {
-                            if (allNodes[ptr]->neighbors[3]->activeGrains[rg] == allNodes[ptr]->activeGrains[g]) {
-                                flip = 1;   
-                            
-                            }
-                        }
-                        if (flip == 0) {
-
-                            allNodes[ptr]->neighbors[3]->grainsHere = allNodes[ptr]->neighbors[3]->grainsHere + 1;
-                            allNodes[ptr]->neighbors[3]->activeGrains[allNodes[ptr]->neighbors[3]->grainsHere-1] = allNodes[ptr]->activeGrains[g];
-                            allNodes[ptr]->neighbors[3]->orientations[allNodes[ptr]->neighbors[3]->grainsHere-1] = allNodes[ptr]->orientations[g];
-                        }
-                }
-            }
-        
-
-
-
-            
-            if (allNodes[ptr]->temp < (mConfig.meltTemp)) {
-                grainExists = 0;
-                if (allNodes[ptr]->grainsHere > 0 || allNodes[ptr]->phase > 0.000000001 || allNodes[ptr]->neighbors[0]->grainsHere > 0 || allNodes[ptr]->neighbors[1]->grainsHere > 0 || allNodes[ptr]->neighbors[2]->grainsHere > 0 || allNodes[ptr]->neighbors[3]->grainsHere > 0) {
-                    grainExists = 1;
-                }
-
-
-                if (!grainExists && prob_dist(gen) <(1-exp(mConfig.dx*mConfig.dx*mConfig.dt*allNodes[ptr]->calcNucRate(mConfig)*-1))) { 
-
-                    addGrain(allNodes[ptr]);
-                }
-            }
-            
+        double sumNeighMu = 0.0;
+        int nExist = 0;
+        for (int nb = 0; nb < 4; nb++) {
+            node* nbr = n->neighbors[nb];
+            if (!nbr) continue;
+            if (nbr->exists == 0) continue; // enforce no-flux by skipping
+            sumNeighMu += tempPartComp[nbr->id];
+            nExist++;
         }
+
+        double lapMu = 0.0;
+        if (nExist > 0) {
+            lapMu = (sumNeighMu - nExist * mu);
+        }
+
+        // Compute change in composition (conservative)
+        double dC =  (mConfig.dt / denom) * lapMu;
+
+        // Optionally gate diffusion by liquid fraction (keep particles mostly mobile in liquid)
+        double mobilityGate = (1.0 - n->phase); // 1 in liquid, 0 in fully solid
+        n->particleComp += dC * mobilityGate;
+
+        // clamp to physical bounds
+        if (n->particleComp < 0.0) n->particleComp = 0.0;
+        if (n->particleComp > 1.0) n->particleComp = 1.0;
+    }
+
+    // second pass: clamp values and propagate active grains / nucleation
+    for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
+        node* n = allNodes[ptr];
+        if (!n) continue;
+
+        if (n->phase > 1.0) n->phase = 1.0;
+        if (n->phase < 0.0) n->phase = 0.0;
+
+        for (int g = 0; g < n->grainsHere; g++) {
+            int activeGrainID = n->activeGrains[g];
+            if (activeGrainID < 0) continue;
+
+            // Clamp the local grain slot value (index = g)
+            if (n->grainPhases[g] >= 1.0) {
+                n->grainPhases[g] = 1.0;
+            }
+            if (n->grainPhases[g] < 0.0) {
+                n->grainPhases[g] = 0.0;
+            }
+
+            if (n->grainPhases[g] > 1e-9) {
+                // try to add this grain (by global id) to neighbors if not already present
+                for (int nb = 0; nb < 4; nb++) {
+                    node* nbr = n->neighbors[nb];
+                    if (!nbr || nbr->exists == 0) continue;
+                    bool found = false;
+                    for (int rg = 0; rg < nbr->grainsHere; rg++) {
+                        if (nbr->activeGrains[rg] == activeGrainID) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        int insertPos = nbr->grainsHere;
+                        if (insertPos < 9) {
+                            nbr->grainsHere = insertPos + 1;
+                            nbr->activeGrains[insertPos] = activeGrainID;
+                            nbr->orientations[insertPos] = n->orientations[g];
+                        }
+                    }
+                }
+            }
+        }
+
+
+
+
+            
+        if (n->temp < (mConfig.meltTemp)) {
+            grainExists = 0;
+            if (n->grainsHere > 0 || n->phase > 0.000000001 || n->neighbors[0]->grainsHere > 0 || n->neighbors[1]->grainsHere > 0 || n->neighbors[2]->grainsHere > 0 || n->neighbors[3]->grainsHere > 0) {
+                grainExists = 1;
+            }
+            
+            if (!grainExists && prob_dist(gen) < (1 - exp(mConfig.dx * mConfig.dx * mConfig.dt * n->calcNucRate(mConfig) * -1))) { 
+                addGrain(n);
+            }
+        }
+            
+        
     }
 
 }
@@ -279,7 +278,7 @@ float node::calcNucRate(config modelConf) {
     // J / (m^2kg/(s^2K) * K) = J/(m^2kg/(s^2)) = (kg*m^2/s^2)/(m^2kg/s^2) = unitless
 
     //std::cout << "Inner Exponential Term: " << std::setprecision(10) << inner << std::endl;
-    long double nucleationRate = (k*temp*numAtoms/h)*exp(-1*modelConf.diffusionActivationEnergy/(8.314*temp))*exp(inner);
+    long double nucleationRate = (k*temp*numAtoms/h)*exp(-1*modelConf.diffusionActivationEnergy/(8.314*temp))*exp(-inner);
     //std::cout << "First Term: "<< (k*temp*numAtoms/h) << std::endl << "Second Term: " << exp(-1*modelConf.diffusionActivationEnergy/(8.314*temp)) << std::endl << "ThirdTerm: " << exp(-1*inner) << std::endl;
    // std::cout << "Nucleation Rate at Temp " << temp << " is " << nucleationRate << std::endl << std::endl;
 
