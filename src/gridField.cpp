@@ -11,36 +11,50 @@ void gridField::buildGrid() {
     // top row
     for (int j = 0; j < GRID_COLS; j++) {
         node& gp = grid[0][j];
-        gp.neighbors[0] = (j > 0) ? &grid[0][j - 1] : &grid[0][GRID_COLS - 1]; // Left
-        gp.neighbors[1] = (j < GRID_COLS - 1) ? &grid[0][j + 1] : &grid[0][0]; // Right
-        gp.neighbors[2] = &top;
-        gp.neighbors[3] = &grid[1][j]; // Down
-        allNodes[j] = &gp;
-        gp.heightPos = 0;
+        // left, right, up, down, up-left, up-right, down-left, down-right
+        gp.neighbors[0] = (j > 0) ? &grid[0][j - 1] : &grid[0][GRID_COLS - 1]; // left
+        gp.neighbors[1] = (j < GRID_COLS - 1) ? &grid[0][j + 1] : &grid[0][0]; // right
+        gp.neighbors[2] = &top; // up
+        gp.neighbors[3] = &grid[1][j]; // down
+        gp.neighbors[4] = &top; // up-left (top row -> top)
+        gp.neighbors[5] = &top; // up-right
+        gp.neighbors[6] = &grid[1][ (j > 0) ? j - 1 : GRID_COLS - 1 ]; // down-left
+        gp.neighbors[7] = &grid[1][ (j < GRID_COLS - 1) ? j + 1 : 0 ]; // down-right
+         allNodes[j] = &gp;
+         gp.heightPos = 0;
     }
 
     // interior rows
     for (int i = 1; i < GRID_ROWS - 1; i++) {
         for (int j = 0; j < GRID_COLS; j++) {
             node& gp = grid[i][j];
-            gp.neighbors[0] = (j > 0) ? &grid[i][j - 1] : &grid[i][GRID_COLS - 1]; // Left
-            gp.neighbors[1] = (j < GRID_COLS - 1) ? &grid[i][j + 1] : &grid[i][0]; // Right
-            gp.neighbors[2] = &grid[i - 1][j]; // Up
-            gp.neighbors[3] = &grid[i + 1][j]; // Down
-            allNodes[i * GRID_COLS + j] = &gp;
-            gp.heightPos = i;
+            // left, right, up, down, up-left, up-right, down-left, down-right
+            gp.neighbors[0] = (j > 0) ? &grid[i][j - 1] : &grid[i][GRID_COLS - 1]; // left
+            gp.neighbors[1] = (j < GRID_COLS - 1) ? &grid[i][j + 1] : &grid[i][0]; // right
+            gp.neighbors[2] = &grid[i - 1][j]; // up
+            gp.neighbors[3] = &grid[i + 1][j]; // down
+            gp.neighbors[4] = &grid[i - 1][ (j > 0) ? j - 1 : GRID_COLS - 1 ]; // up-left
+            gp.neighbors[5] = &grid[i - 1][ (j < GRID_COLS - 1) ? j + 1 : 0 ];       // up-right
+            gp.neighbors[6] = &grid[i + 1][ (j > 0) ? j - 1 : GRID_COLS - 1 ]; // down-left
+            gp.neighbors[7] = &grid[i + 1][ (j < GRID_COLS - 1) ? j + 1 : 0 ];       // down-right
+             allNodes[i * GRID_COLS + j] = &gp;
+             gp.heightPos = i;
         }
     }
 
     // bottom row
     for (int j = 0; j < GRID_COLS; j++) {
         node& gp = grid[GRID_ROWS - 1][j];
-        gp.neighbors[0] = (j > 0) ? &grid[GRID_ROWS - 1][j - 1] : &grid[GRID_ROWS - 1][GRID_COLS - 1]; // Left
-        gp.neighbors[1] = (j < GRID_COLS - 1) ? &grid[GRID_ROWS - 1][j + 1] : &grid[GRID_ROWS - 1][0]; // Right
-        gp.neighbors[2] = &grid[GRID_ROWS - 2][j];
-        gp.neighbors[3] = &bottom; // Down
-        allNodes[(GRID_ROWS - 1) * GRID_COLS + j] = &gp;
-        gp.heightPos = (GRID_ROWS - 1);
+        gp.neighbors[0] = (j > 0) ? &grid[GRID_ROWS - 1][j - 1] : &grid[GRID_ROWS - 1][GRID_COLS - 1]; // left
+        gp.neighbors[1] = (j < GRID_COLS - 1) ? &grid[GRID_ROWS - 1][j + 1] : &grid[GRID_ROWS - 1][0]; // right
+        gp.neighbors[2] = &grid[GRID_ROWS - 2][j]; // up
+        gp.neighbors[3] = &bottom; // down
+        gp.neighbors[4] = &grid[GRID_ROWS - 2][ (j > 0) ? j - 1 : GRID_COLS - 1 ]; // up-left
+        gp.neighbors[5] = &grid[GRID_ROWS - 2][ (j < GRID_COLS - 1) ? j + 1 : 0 ];       // up-right
+        gp.neighbors[6] = &bottom; // down-left (bottom row -> bottom)
+        gp.neighbors[7] = &bottom; // down-right
+         allNodes[(GRID_ROWS - 1) * GRID_COLS + j] = &gp;
+         gp.heightPos = (GRID_ROWS - 1);
     }
 
 };
@@ -71,6 +85,9 @@ void gridField::init(config modelConfig) {
             grid[ik][jk].grainPhases = {0,0,0,0,0,0,0,0,0};
             grid[ik][jk].activeGrains = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
             grid[ik][jk].id = ik * GRID_COLS + jk;
+            grid[ik][jk].heightPos = ik;
+            // Initialize temperature: startTemp + vertical temperature gradient
+            grid[ik][jk].temp = modelConfig.startTemp + (ik * modelConfig.tGrad * modelConfig.dx);
         };
     }
 }
@@ -138,52 +155,69 @@ void gridField::update(
         node* n = allNodes[ptr];
         if (!n) continue;
         
-
-        n->temp = tGrad[ptr];
-
         // update phase
-        n->phase = n->phase - (mConfig.dt / mConfig.cellArea) * phaseDiffEn[ptr];
+        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[ptr]*5e-20;
 
         // update grain phases
         for (int g = 0; g < 9; g++) {
-            n->grainPhases[g] = n->grainPhases[g] - (1e15 * mConfig.dt / mConfig.cellArea * grainDiffEn[ptr][g]);
+            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[ptr][g]*1e-19);
         }
     }
 
-    // conservative particle composition update using chemical potential array (tempPartComp)
-    // discrete divergence of flux: dC/dt = mobility * laplacian(mu)
-    const double particleMobility = 1e-6; // tune or add to config
+    // THERMODYNAMIC particle update: dC/dt = mobility * laplacian(μ)
+    // Particles flow DOWN the chemical potential gradient to minimize free energy
+    // μ is computed in calcParticleCompDiff() and stored in tempPartComp array
+    const double particleMobilityLiquid = 5e-19;   // high mobility in liquid
+    const double particleMobilitySolid = 1e-28;    // lower mobility in solid
     double dx = mConfig.dx;
     double denom = (dx * dx);
+    
+    // Store composition changes
+    std::array<double, TOTAL_NODES> particleCompChange;
+    particleCompChange.fill(0.0);
+    
     for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
         node* n = allNodes[ptr];
         if (!n) continue;
 
+        // tempPartComp[ptr] contains the chemical potential μ at this node
         double mu = tempPartComp[ptr];
-
+        
+        // Compute 4-point Laplacian of chemical potential
         double sumNeighMu = 0.0;
         int nExist = 0;
-        for (int nb = 0; nb < 4; nb++) {
+        for (int nb = 0; nb < 4; nb++) {  // ONLY 4-point: left, right, up, down
             node* nbr = n->neighbors[nb];
             if (!nbr) continue;
-            if (nbr->exists == 0) continue; // enforce no-flux by skipping
+            if (nbr->exists == 0) continue; // no-flux boundary
             sumNeighMu += tempPartComp[nbr->id];
             nExist++;
         }
 
         double lapMu = 0.0;
         if (nExist > 0) {
-            lapMu = (sumNeighMu - nExist * mu);
+            lapMu = (sumNeighMu - nExist * mu);  // (sum of 4 neighbors - 4*center)
         }
 
-        // Compute change in composition (conservative)
-        double dC =  (mConfig.dt / denom) * lapMu;
-
-        // Optionally gate diffusion by liquid fraction (keep particles mostly mobile in liquid)
-        double mobilityGate = (1.0 - n->phase); // 1 in liquid, 0 in fully solid
-        n->particleComp += dC * mobilityGate;
-
-        // clamp to physical bounds
+        // Choose mobility based on phase (liquid vs solid)
+        double liquidFrac = (1.0 - n->phase);  // 1 in liquid, 0 in solid
+        double mobility = particleMobilityLiquid * liquidFrac + particleMobilitySolid * (1.0 - liquidFrac);
+        
+        // Flux: J = mobility * laplacian(μ)
+        // This drives particles toward lower μ regions (energy minima)
+        double flux = mobility * lapMu / denom;
+        
+        // Store change
+        particleCompChange[ptr] = -1*mConfig.dt * flux;
+    }
+    
+    // Apply changes TOGETHER to preserve global sum
+    for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
+        node* n = allNodes[ptr];
+        if (!n) continue;
+        n->particleComp += particleCompChange[ptr];
+        
+        // Clamp to [0, 1] to prevent unphysical values
         if (n->particleComp < 0.0) n->particleComp = 0.0;
         if (n->particleComp > 1.0) n->particleComp = 1.0;
     }
@@ -208,79 +242,89 @@ void gridField::update(
                 n->grainPhases[g] = 0.0;
             }
 
-            if (n->grainPhases[g] > 1e-9) {
+            if (n->grainPhases[g] > 1e-16) {
                 // try to add this grain (by global id) to neighbors if not already present
-                for (int nb = 0; nb < 4; nb++) {
+                for (int nb = 0; nb < 8; nb++) {
                     node* nbr = n->neighbors[nb];
-                    if (!nbr || nbr->exists == 0) continue;
-                    bool found = false;
-                    for (int rg = 0; rg < nbr->grainsHere; rg++) {
-                        if (nbr->activeGrains[rg] == activeGrainID) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        int insertPos = nbr->grainsHere;
-                        if (insertPos < 9) {
-                            nbr->grainsHere = insertPos + 1;
-                            nbr->activeGrains[insertPos] = activeGrainID;
-                            nbr->orientations[insertPos] = n->orientations[g];
-                        }
-                    }
-                }
-            }
-        }
+                     if (!nbr || nbr->exists == 0) continue;
+                     bool found = false;
+                     for (int rg = 0; rg < nbr->grainsHere; rg++) {
+                         if (nbr->activeGrains[rg] == activeGrainID) {
+                             found = true;
+                             break;
+                         }
+                     }
+                     if (!found) {
+                         int insertPos = nbr->grainsHere;
+                         if (insertPos < 9) {
+                             nbr->grainsHere = insertPos + 1;
+                             nbr->activeGrains[insertPos] = activeGrainID;
+                             nbr->orientations[insertPos] = n->orientations[g];
+                         }
+                     }
+                 }
+             }
+         }
 
-
-
-
-            
         if (n->temp < (mConfig.meltTemp)) {
             grainExists = 0;
-            if (n->grainsHere > 0 || n->phase > 0.000000001 || n->neighbors[0]->grainsHere > 0 || n->neighbors[1]->grainsHere > 0 || n->neighbors[2]->grainsHere > 0 || n->neighbors[3]->grainsHere > 0) {
-                grainExists = 1;
+            if (n->grainsHere > 0 ) grainExists = 1;
+            for (int nb = 0; nb < 8 && !grainExists; nb++) {
+                node* nbr = n->neighbors[nb];
+                if (!nbr) continue;
+                if (nbr->grainsHere > 0) grainExists = 1;
             }
-            
-            if (!grainExists && prob_dist(gen) < (1 - exp(mConfig.dx * mConfig.dx * mConfig.dt * n->calcNucRate(mConfig) * -1))) { 
-                addGrain(n);
-            }
-        }
-            
+             
+            if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,3) * mConfig.dt * n->calcNucRate(mConfig) * -1))) { 
+                 addGrain(n);
+             }
+         }
         
-    }
+        // Update temperature after checking for nucleation
+        n->temp = tGrad[ptr];
+             
+         
+     }
 
 }
 
 
 float node::calcNucRate(config modelConf) {
-    double dForceMo = modelConf.drivingForceSlopek * temp + modelConf.drivingForceIntercept;
-    // kJ/mol
-    dForceMo = 1000*dForceMo / modelConf.molarVolume;
-    // J/m^3
-    //boltzman constant
-    //std::cout << "Driving Force: " << dForceMo << std::endl;
 
-    double k= 1.380649e-23; // m^2kg/(s^2K)
-    // planck constant
-    double h = 6.62607015e-34; // m^2kg/s
-    //Number atoms in cell
-    double avogadro = 6.02214076e23; // #atoms/mole
-    // (m^3/mol)^(2/3) * (#atoms/mol)^(1/3)
-    double numAtoms = modelConf.cellArea*avogadro/(pow(modelConf.molarVolume, 2.0/3.0) * pow(avogadro, 1.0/3.0));
-    //std::cout << "Number of Atoms in Cell: " << numAtoms << std::endl;
-    //std::cout << "LiqSolIntE: " << modelConf.liqSolIntE << std::endl;
-    double freeEnergyNucleusFormation = (16*3.14159*pow(modelConf.liqSolIntE,3)/(3*(dForceMo*dForceMo)));
-    // 16*pi*<liqSolIntE^3>/(3*(dForceMo^2)) = (J/m^2)^3 / (J/m^3)^2 = J
-    //
-    //std::cout << "Free Energy of Nucleus Formation at Temp " << temp << " is " << freeEnergyNucleusFormation << std::endl;
-    long double inner = freeEnergyNucleusFormation/(k*temp);
-    // J / (m^2kg/(s^2K) * K) = J/(m^2kg/(s^2)) = (kg*m^2/s^2)/(m^2kg/s^2) = unitless
+    double k  = 1.380649e-23;        // Boltzmann constant (J/K)
+    double h  = 6.62607015e-34;      // Planck constant (J·s)
+    double NA = 6.02214076e23;       // Avogadro (1/mol)
 
-    //std::cout << "Inner Exponential Term: " << std::setprecision(10) << inner << std::endl;
-    long double nucleationRate = (k*temp*numAtoms/h)*exp(-1*modelConf.diffusionActivationEnergy/(8.314*temp))*exp(-inner);
-    //std::cout << "First Term: "<< (k*temp*numAtoms/h) << std::endl << "Second Term: " << exp(-1*modelConf.diffusionActivationEnergy/(8.314*temp)) << std::endl << "ThirdTerm: " << exp(-1*inner) << std::endl;
-   // std::cout << "Nucleation Rate at Temp " << temp << " is " << nucleationRate << std::endl << std::endl;
+    // Driving force (J/m^3)
+    double dForceMo = modelConf.drivingForceSlopek * temp
+                    + modelConf.drivingForceIntercept;
+    dForceMo = 1000.0 * dForceMo / modelConf.molarVolume;
 
-    return nucleationRate;
+    // === 3D modification: use cell *volume*, not area ===
+    double cellVolume = pow(modelConf.dx,3);
+
+    // atomic number density (atoms / m^3)
+    double atomicDensity = NA / modelConf.molarVolume;
+
+    // atoms in the control volume
+    double numAtoms = atomicDensity * cellVolume;
+
+    // Interfacial energy γ (J/m^2)
+    double gamma = modelConf.liqSolIntE;
+
+    // === 3D spherical nucleus ΔG* ===
+    double dGstar = (16.0 * 3.141592 * pow(gamma, 3.0)) /
+                    (3.0 * dForceMo * dForceMo);
+
+    // thermal factor exp(−Q / RT)
+    double diffTerm = exp(-modelConf.diffusionActivationEnergy /
+                          (8.314462618 * temp));
+
+    // nucleation prefactor A = (kT / h) * N
+    double prefactor = (k * temp / h) * numAtoms;
+
+    // CNT rate: I = A * exp(−ΔG* / kT)
+    double rate = prefactor * diffTerm * exp(-dGstar / (k * temp));
+    //std::cout << "Nucleation Rate at Temp " << temp << " K: " << rate << " nuclei/m^3/s\n";
+    return (float)rate;
 }

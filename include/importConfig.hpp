@@ -52,7 +52,7 @@ struct config {
     double molarMass;
     double molarVolume;
     double diffusionActivationEnergy;
-    
+    double particleDiameter; //m
 
 };
 

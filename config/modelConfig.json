@@ -1,32 +1,70 @@
 {
+  "__comments": {
+    "dx_um": "Grid spacing in micrometers (um). Converted to meters in code: dx = dx_um * 1e-6",
+    "dt_s": "Time step in seconds.",
+    "startTempK": "Initial temperature in Kelvin.",
+    "meltTemp": "Material melting temperature in Kelvin.",
+    "HeatCapacityJKgK": "Specific heat capacity (J/kg·K).",
+    "Densitykgm3": "Material density (kg/m^3).",
+    "cellHeightum": "Physical sample height (um).",
+    "cellWidthum": "Physical sample width (um).",
+    "particleVolumeFraction": "Initial particle volume fraction (0..1).",
+    "particleDiameter_um": "Particle diameter in micrometers (um).",
+    "LiqSolIntEnergyJm2": "Liquid–solid interfacial energy (J/m^2).",
+    "LiqSolIntWidthum": "Liquid–solid interfacial width (um).",
+    "GrainIntEnergyJm2": "Grain boundary energy (J/m^2).",
+    "GrainIntWidthum": "Grain boundary width (um).",
+    "PhaseBarrierHeightCoefficient": "Phase-field barrier height coefficient (dimensionless).",
+    "GrainBarrierHeightCoefficient": "Grain-field barrier height coefficient (dimensionless).",
+    "BasePlateTempK": "Base plate temperature (K) used for boundary/initial conditions.",
+    "diffusionActivationEnergy": "Activation energy for diffusion (units as used in nucleation formula).",
+    "TimeSteps": "Number of timesteps to run the simulation.",
+    "CoolingRatempers": "Cooling rate (K per second).",
+    "tempGradKperm": "Vertical temperature gradient (K per meter).",
+    "MinimumTempK": "Minimum allowed temperature (K).",
+    "molarMass": "Molar mass of material (g/mol).",
+    "drivingForceSlopek": "Slope used in driving force calculation.",
+    "drivingForceIntercept": "Intercept used in driving force calculation.",
+    "particleSolidIntEnergy": "Particle interaction energy in solid (J/m^2 or arbitrary unit used in model).",
+    "particleLiqIntEnergy": "Particle interaction energy in liquid.",
+    "Note": "Removed keys: solidConductivityWMK, HomogeneousNucleationCoefficient, UndercoolingRequirement. Those are handled via defaults in code if needed."
+  },
+
   "dx_um": 1,
+  "dt_s": 1e-3,
+  "startTempK": 2896,
   "meltTemp": 2896,
+
   "HeatCapacityJKgK": 251,
   "Densitykgm3": 10280,
-  "dt_s": 0.00000000000000001,
-  "startTempK": 2896,
-  "solidConductivityWMK": 138,
+
   "cellHeightum": 50,
   "cellWidthum": 50,
-  "particleVolumeFraction": 0.01,
-  "LiqSolIntEnergyJm2": 4,
-  "LiqSolIntWidthum": 0.5,
-  "GrainIntEnergyJm2": 4,
-  "GrainIntWidthum": 0.5,
-  "PhaseBarrierHeightCoefficient": 0.5,
-  "BasePlateTempK": 500.00,
-  "HomogeneousNucleationCoefficient": 100000000000000000000,
+
+  "particleVolumeFraction": 0.1,
+  "particleDiameter_um": 1.0,
+
+  "LiqSolIntEnergyJm2": 2.92,
+  "LiqSolIntWidthum": 1,
+  "GrainIntEnergyJm2": 2.92,
+  "GrainIntWidthum": 1,
+
+  "PhaseBarrierHeightCoefficient": 0.25,
+  "GrainBarrierHeightCoefficient": 0.125,
+
+  "BasePlateTempK": 500.0,
+
   "diffusionActivationEnergy": 1.5,
-  "TimeSteps": 2000,
-  "UndercoolingRequirement": 1,
-  "CoolingRatempers": 10000000000000000,
-  "MinimumTempK": 10,
-  "tempGradKperm": 2000000,
+  "TimeSteps": 100000,
+
+  "CoolingRatempers": 1,
+  "MinimumTempK": 100,
+  "tempGradKperm": 100000.0,
+
   "molarMass": 95.95,
   "drivingForceSlopek": 13.8,
   "drivingForceIntercept": 39842,
-  "particleSolidIntEnergy": 2.0,
-  "particleLiqIntEnergy": 1.0,
-  "GrainBarrierHeightCoefficient": 0.125
 
+  "particleSolidIntEnergy": 1,
+  "particleLiqIntEnergy": 0.1
 }

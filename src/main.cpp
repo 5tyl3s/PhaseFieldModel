@@ -3,6 +3,9 @@
 #include "modelStartup.hpp"
 #include "importConfig.hpp"
 #include "gridField.hpp"
+#include "glVisualization.hpp"   // <- add: declare GLVisualizer
+#include <GL/glew.h>             // <- add: for glReadPixels / GL types
+#include <GLFW/glfw3.h>          // <- add: for glfwGetFramebufferSize / context
 #include <omp.h>
 #include <direct.h> // For _getcwd on Windows
 
@@ -11,6 +14,8 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#include <filesystem>
+#include <iomanip>
 
 // Use compile-time TOTAL_NODES from header so sizes match the grid definition
 std::array<double, TOTAL_NODES> newTemp;
@@ -19,12 +24,79 @@ std::array<double, TOTAL_NODES> phaseDiffEn;
 std::array<double, TOTAL_NODES> tempGrad;
 std::array<double, TOTAL_NODES> tempPartComp;
 
+// Simple BMP writer (expects data from glReadPixels in GL_RGBA, GL_UNSIGNED_BYTE)
+static bool saveBMP(const std::string &path, int width, int height, const std::vector<unsigned char> &rgba) {
+    if ((int)rgba.size() < width * height * 4) return false;
+    std::ofstream f(path, std::ios::binary);
+    if (!f.is_open()) return false;
+
+    // BMP headers
+    int rowBytes = width * 3;
+    int pad = (4 - (rowBytes % 4)) % 4;
+    int dataSize = (rowBytes + pad) * height;
+    uint32_t fileSize = 54 + dataSize;
+
+    unsigned char fileHeader[14] = {
+        'B','M',
+        0,0,0,0, // file size
+        0,0, // reserved
+        0,0,
+        54,0,0,0
+    };
+    fileHeader[2] = (unsigned char)(fileSize      & 0xFF);
+    fileHeader[3] = (unsigned char)((fileSize>>8) & 0xFF);
+    fileHeader[4] = (unsigned char)((fileSize>>16)& 0xFF);
+    fileHeader[5] = (unsigned char)((fileSize>>24)& 0xFF);
+
+    unsigned char infoHeader[40] = {0};
+    infoHeader[0] = 40;
+    infoHeader[4] = (unsigned char)(width & 0xFF);
+    infoHeader[5] = (unsigned char)((width>>8) & 0xFF);
+    infoHeader[6] = (unsigned char)((width>>16) & 0xFF);
+    infoHeader[7] = (unsigned char)((width>>24) & 0xFF);
+    infoHeader[8] = (unsigned char)(height & 0xFF);
+    infoHeader[9] = (unsigned char)((height>>8) & 0xFF);
+    infoHeader[10] = (unsigned char)((height>>16) & 0xFF);
+    infoHeader[11] = (unsigned char)((height>>24) & 0xFF);
+    infoHeader[12] = 1; // planes
+    infoHeader[14] = 24; // bits per pixel
+
+    f.write(reinterpret_cast<char*>(fileHeader), sizeof(fileHeader));
+    f.write(reinterpret_cast<char*>(infoHeader), sizeof(infoHeader));
+
+    // glReadPixels returns pixels bottom-to-top by default (y=0 bottom). BMP expects bottom-up so write rows in order.
+    // Convert RGBA -> BGR and write per-row with padding.
+    std::vector<unsigned char> rowbuf(rowBytes + pad);
+    for (int y = 0; y < height; ++y) {
+        int base = y * width * 4;
+        unsigned char *p = rowbuf.data();
+        for (int x = 0; x < width; ++x) {
+            unsigned char r = rgba[base + x*4 + 0];
+            unsigned char g = rgba[base + x*4 + 1];
+            unsigned char b = rgba[base + x*4 + 2];
+            *p++ = b;
+            *p++ = g;
+            *p++ = r;
+        }
+        // padding bytes already zero-initialized if any
+        for (int k = 0; k < pad; ++k) *p++ = 0;
+        f.write(reinterpret_cast<char*>(rowbuf.data()), rowbuf.size());
+    }
+
+    f.close();
+    return true;
+}
+
 int main() {
     std::cout << "Hello, World!" << std::endl;
     std::cout << "Attempting to read config file..." << std::endl << std::flush;
-    config configData = inputConfig("config/config.txt");
+    if(!readCoeffs("../config/spherical_harmonics_coeffs.txt")) {
+        std::cerr << "Failed to read spherical harmonic coefficients!\n";
+        return 1;
+    }
+    config configData = inputConfig("../config/modelConfig.json");
     if (configData.success == 0) {
-        std::cerr << "Config Failed to load from: config/config.txt" << std::endl << std::flush;
+        std::cerr << "Config Failed to load from: ../config/modelConfig.json" << std::endl << std::flush;
         return 1;
     }
 
@@ -40,8 +112,51 @@ int main() {
     node* nd2;
     std::cout << "Starting Time Steps..." << std::endl << std::flush;
 
+    // create visualizer before the simulation so it updates live
+    GLVisualizer visualizer(GRID_ROWS, GRID_COLS, 50);
+    bool haveViz = false;
+    if (visualizer.initialize("Phase Field Visualization")) {
+        haveViz = true;
+        visualizer.updateFromGrid(globalField);
+    } else {
+        std::cerr << "Visualizer init failed, continuing without live display\n";
+    }
+
+    // prepare frames output dir
+    std::filesystem::path framesDir = std::filesystem::current_path() / "viz_frames";
+    std::error_code ec;
+    std::filesystem::create_directories(framesDir, ec);
+
+    int frameCounter = 0;
+    int saveEvery = visualizer.getUpdateInterval();
+    bool simulationComplete = false;
+
     for (int t = 0; t < configData.timeSteps; t++) {
         if (t%10 == 0) std::cout << t << "/" << configData.timeSteps << std::endl;
+        
+        // Check every 1000 timesteps if fully solidified with all grains present
+        if (t > 0 && (t % 1000 == 0)) {
+            bool allSolidified = true;
+            bool allHaveGrains = true;
+            for (int i = 0; i < GRID_ROWS && allSolidified; ++i) {
+                for (int j = 0; j < GRID_COLS && allSolidified; ++j) {
+                    node& n = globalField.grid[i][j];
+                    // Check if solidified (phase >= 1.0)
+                    if (n.phase < 0.9999) {
+                        allSolidified = false;
+                    }
+                    // Check if has a grain
+                    if (n.grainsHere <= 0) {
+                        allHaveGrains = false;
+                    }
+                }
+            }
+            if (allSolidified && allHaveGrains) {
+                std::cout << "Fully solidified with grains at timestep " << t << ", ending simulation\n";
+                simulationComplete = true;
+                break;
+            }
+        }
         #pragma omp parallel for private(nd2)
         for (int node = 0; node < TOTAL_NODES; node++) {
             nd2 = globalField.allNodes[node];
@@ -54,8 +169,57 @@ int main() {
 
         globalField.update(phaseDiffEn, grainDiffEn, tempPartComp, tempGrad);
 
+        // update visualizer and save a frame periodically
+        if (haveViz && (t % saveEvery == 0)) {
+            visualizer.updateFromGrid(globalField);
+            visualizer.processInput();
+            visualizer.render();
+
+            // read back full framebuffer and save BMP
+            int winW = 0, winH = 0;
+            // get framebuffer size from current GLFW context
+            GLFWwindow* ctx = glfwGetCurrentContext();
+            if (ctx) {
+                glfwGetFramebufferSize(ctx, &winW, &winH);
+            } else {
+                winW = 0; winH = 0;
+            }
+            // fallback: use GRID_COLS/ROWS scaled to pixels; assume 800x800 if 0
+            if (winW == 0 || winH == 0) { winW = GRID_COLS; winH = GRID_ROWS; }
+
+            // allocate buffer and read pixels
+            std::vector<unsigned char> pixels(winW * winH * 4);
+            glReadPixels(0, 0, winW, winH, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+            std::ostringstream fname;
+            fname << framesDir.string() << "/frame_" << std::setw(6) << std::setfill('0') << frameCounter << ".bmp";
+            if (!saveBMP(fname.str(), winW, winH, pixels)) {
+                std::cerr << "Failed to write frame " << fname.str() << std::endl;
+            } else {
+                frameCounter++;
+            }
+        }
+
+        // Stop simulation if visualizer window is closed by user
+        if (haveViz && visualizer.shouldClose()) {
+            std::cout << "Visualizer window closed by user, stopping simulation\n";
+            break;
+        }
     }
 
+    // If simulation completed naturally or by solidification check, pause visualizer on last frame
+    if (simulationComplete && haveViz) {
+        std::cout << "Simulation complete. Displaying final frame in visualizer window.\n";
+        std::cout << "Close the window to finish and save output files.\n";
+        visualizer.updateFromGrid(globalField);
+        visualizer.render();
+        // Keep displaying the final frame until user closes window
+        while (haveViz && !visualizer.shouldClose()) {
+            visualizer.processInput();
+            visualizer.render();
+            std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 FPS
+        }
+    }
 
     // Write output files using GRID_ROWS / GRID_COLS
     std::string fileNameTemp = "TempGrid.csv";
@@ -136,7 +300,6 @@ int main() {
     
     std::cout << "Elapsed(ms)=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start1).count() << std::endl;
     return 0;
-
 }
 
 // Helper function to resize grainDiffEn everywhere

@@ -3,8 +3,8 @@
 #include "importConfig.hpp"
 
 // Define grid dimensions in one place. Change these values to the desired grid size.
-constexpr int GRID_ROWS = 1000;
-constexpr int GRID_COLS = 1000;
+constexpr int GRID_ROWS = 75;
+constexpr int GRID_COLS = 75;
 constexpr int TOTAL_NODES = GRID_ROWS * GRID_COLS;
 
 struct eulerAngles {
@@ -26,7 +26,8 @@ struct node {
     std::array<double, 9> grainPhases;
     std::array<int, 9> activeGrains;
 
-    std::array<node*, 4> neighbors; //x-1,x+1,y-1,y+1
+    // Use 8 neighbors (Moore): left, right, up, down, up-left, up-right, down-left, down-right
+    std::array<node*, 8> neighbors;
     float calcNucRate(config modelConf);
     
 };

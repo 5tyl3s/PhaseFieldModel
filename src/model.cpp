@@ -6,8 +6,65 @@
 #include <omp.h>
 
 
+#include <vector>
+std::vector<double> SH_coeffs; // Spherical harmonic coefficients
+int Lmax = 8;                   // Msaximum degree (match MATLAB)
+#include <fstream>
+#include <string>
 
+auto safeClamp = [](double v, double low, double high){
+    if (std::isnan(v) || std::isinf(v)) return (low+high)/2.0;
+    return std::max(low, std::min(high, v));
+};
 
+bool readCoeffs(const std::string& filename) {
+    std::ifstream file(filename);
+    std::cout << "Reading Spherical Harmonic Coefficients from: " << filename << std::endl;
+    if(!file.is_open()) return false;
+
+    SH_coeffs.clear();
+    std::cout << "Loading Coefficients..." << std::endl;
+    double val;
+    while(file >> val) SH_coeffs.push_back(val);
+    std::cout << "Loaded " << SH_coeffs.size() << " Coefficients." << std::endl;
+    file.close();
+    return true;
+}
+// factorial helper
+double factorial(int n) {
+    double f = 1.0;
+    for(int i=2;i<=n;i++) f *= i;
+    return f;
+}
+
+// Associated Legendre Polynomial P_l^m(x)
+double P_lm(int l, int m, double x) {
+    if(m < 0) m = -m;
+    double pmm = 1.0;
+    if(m > 0) {
+        double somx2 = std::sqrt(1-x*x);
+        double fact = 1.0;
+        for(int i=1;i<=m;i++) { pmm *= -fact*somx2; fact += 2; }
+    }
+    if(l == m) return pmm;
+    double pmmp1 = x*(2*m+1)*pmm;
+    if(l == m+1) return pmmp1;
+    double pll = 0.0;
+    for(int ll = m+2; ll <= l; ll++) {
+        pll = ((2*ll-1)*x*pmmp1 - (ll+m-1)*pmm)/(ll-m);
+        pmm = pmmp1;
+        pmmp1 = pll;
+    }
+    return pll;
+}
+
+// Real spherical harmonic Y_lm
+double Y_lm_real(int l, int m, double theta, double phi) {
+    double norm = std::sqrt((2*l+1)/(4*3.141592653589793) * factorial(l-m)/factorial(l+m));
+    if(m==0) return norm * P_lm(l,0,std::cos(theta));
+    if(m>0) return std::sqrt(2.0)*norm*P_lm(l,m,std::cos(theta))*std::cos(m*phi);
+    else return std::sqrt(2.0)*norm*P_lm(l,-m,std::cos(theta))*std::sin(-m*phi);
+}
 
 double sumOtherGrainsSquared(int notIndex,node Node, int numGrains) {
     double notThisGrain = 0;
@@ -23,49 +80,75 @@ double sumOtherGrainsSquared(int notIndex,node Node, int numGrains) {
 
 
 
-double ifLiq(double temp, double meltTemp) {
+double underCool(double temp, double meltTemp) {
     //0 Above melt, 1 below
+    //std::cout << "Temperature: " << temp << " UnderCooled:  " << 0.5*(1-(tanh(1000000*((temp/meltTemp)-1)))) << std::endl;
     return 0.5*(1-(tanh(1000000*((temp/meltTemp)-1))));
 
 
 }
 
-double calcGrainBoundaryEnergy(eulerAngles orient, std::vector<double> gradient) {
-    std::array<double,3> gradNormal = {-1*gradient[1],1*gradient[0],0};
+double calcGrainBoundaryEnergy(eulerAngles orient, const std::array<double,3>& grad3) {
+    // Parameters
+    const double MIN_GB = 2.9297;   // J/m^2 (your minimum)
+    const double MAX_GB = 8.0;    // upper clamp to avoid blow-ups (tunable)
+    const double PI = 3.141592653589793;
 
-    std::array<double,3> surfPlaneVec = eulerRotate(orient,gradNormal);
-    
-    double angle110 = dotAngle(surfPlaneVec,std::array<double,3> {1,1,0});
-    double angle111 = dotAngle(surfPlaneVec,std::array<double,3> {1,1,1});
-    double angle100 = dotAngle(surfPlaneVec,std::array<double,3> {1,0,0});
-    if (std::isnan(angle110)) { 
-        return 0;
+    // 1) Build surface normal from gradient
+    // If gradient is (dphi/dx, dphi/dy, dphi/dz), a reasonable normal is [-gx, -gy, 1] or [-gx, -gy, 0] depending on convention.
+    // Here we assume the surface normal is approximately (-gx, -gy, 1) to include out-of-plane direction.
+    std::array<double,3> gradNormal = { -grad3[0], -grad3[1], -grad3[2] };
+
+    // If gradient magnitude is tiny -> no well-defined normal (flat), return min
+    double r = std::sqrt(gradNormal[0]*gradNormal[0] + gradNormal[1]*gradNormal[1] + gradNormal[2]*gradNormal[2]);
+    if (r < 1e-12) return MIN_GB;
+
+    // Normalize
+    gradNormal[0] /= r; gradNormal[1] /= r; gradNormal[2] /= r;
+
+    // 2) Rotate normal by grain orientation
+    std::array<double,3> surfPlaneVec = eulerRotate(orient, gradNormal);
+
+    // 3) Convert to spherical coordinates (theta = colatitude in [0, pi], phi in [-pi, pi])
+    double x = surfPlaneVec[0], y = surfPlaneVec[1], z = surfPlaneVec[2];
+    double mag = std::sqrt(x*x + y*y + z*z);
+    if (mag < 1e-12) return MIN_GB; // defensive
+    // clamp z/mag into [-1,1]
+    double zOverR = z / mag;
+    if (zOverR > 1.0) zOverR = 1.0;
+    if (zOverR < -1.0) zOverR = -1.0;
+    double theta = std::acos(zOverR);
+    double phi = std::atan2(y, x);
+    if (!std::isfinite(theta) || !std::isfinite(phi)) return MIN_GB;
+
+    // 4) Validate SH coeff vector size: expected (Lmax+1)^2 coefficients if stored in m=-l..l ordering
+    int expected_count = (Lmax + 1) * (Lmax + 1);
+    if ((int)SH_coeffs.size() < expected_count) {
+        // coefficient file inconsistent: return min
+        std::cerr << "SH_coeffs size " << SH_coeffs.size() << " < expected " << expected_count << std::endl;
+        return MIN_GB;
     }
 
-
-    if (angle110 < angle111) {
-        if (angle110 < angle100) {
-            return 2.783;
+    // 5) Evaluate SH using ordering m = -l .. +l (this is the common ordering and matches MATLAB's typical layout)
+    double energy = 0.0;
+    int idx = 0;
+    for (int l = 0; l <= Lmax; ++l) {
+        for (int m = -l; m <= l; ++m) {
+            // guard
+            if (idx >= (int)SH_coeffs.size()) { return MIN_GB; }
+            energy += SH_coeffs[idx++] * Y_lm_real(l, m, theta, phi);
         }
     }
-    if (angle111<angle100) {
-        if (angle111<angle110) {
-            return 2.962;
-        }
-    } 
-    return 3.192;
-    std::cerr << gradNormal[0] << " " << gradNormal[1] << " " << gradNormal[2] << std::endl;
-    std::cerr << surfPlaneVec[0] <<" " <<  surfPlaneVec[1] << " " << surfPlaneVec[2] << std::endl;
-    std::cerr << orient.theta1 << " " << orient.phi << " " << orient.theta2 << std::endl;
-    std::cerr << angle110 << std::endl;
-    std::cerr << angle111 << std::endl;
-    std::cerr << angle100 << std::endl;
-    std::cerr << "Grain Boundary Calculation Failed See model.cpp" << std::endl;
-    return 999;
 
+    if (!std::isfinite(energy)) return MIN_GB;
 
+    // 6) Clamp to expected range to avoid nonphysical explosion
+    if (energy < MIN_GB) energy = MIN_GB;
+    if (energy > MAX_GB) energy = MAX_GB;
 
+    return energy;
 }
+
 
 
 
@@ -81,7 +164,7 @@ double calcGrainBoundaryEnergy(eulerAngles orient, std::vector<double> gradient)
 
 
     //Math Equations
-    std::array<double,3> eulerRotate(eulerAngles orient, std::array<double,3> rotatedVector) {
+std::array<double,3> eulerRotate(eulerAngles orient, std::array<double,3> rotatedVector) {
     double c1 = std::cos(orient.theta1), s1 = std::sin(orient.theta1);
     double cP = std::cos(orient.phi),  sP = std::sin(orient.phi);
     double c2 = std::cos(orient.theta2), s2 = std::sin(orient.theta2);
@@ -120,15 +203,21 @@ double dotAngle(std::array<double,3> vec1, std::array<double,3> vec2) {
     double mag2 = std::sqrt((vec2[0]*vec2[0])+(vec2[1]*vec2[1])+(vec2[2]*vec2[2]));
     //std::cout << "Magnitude 2: " << mag2 << std::endl;
     //std::cout << "Acos of this: " << (adotb/(mag1*mag2)) << std::endl;
-    double angle = acos(adotb/(mag1*mag2));
+    
 
-    while (angle > (3.14/2)) {
-        angle = angle - (3.14/2);
-    }
-    while (angle < 0) {
-        angle = angle + (3.14/2);
-    }
-    //std::cout << angle << std::endl;
+    double denom = mag1*mag2;
+    double cosval = 0.0;
+    if (denom > 1e-15) cosval = adotb / denom;
+    else cosval = 1.0; // treat as parallel if magnitude is tiny
+
+    // clamp:
+    if (cosval > 1.0) cosval = 1.0;
+    if (cosval < -1.0) cosval = -1.0;
+
+    double angle = acos(cosval);
+
+    // optional: normalize to desired range without weird while loops
+    if (angle > 3.141592/2) angle = 3.141592/2;
     return angle;
 
 }
@@ -137,118 +226,188 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     //std::cout << "Calculating Phase Diff Energy..." << std::endl;
     double pha = nd->phase;
     double part = nd->particleComp;
-    double liq = ifLiq(nd->temp, mConfig.meltTemp);
-    double eLoc = mConfig.phaseCoefficient * (
-        -2 * (1 - pha) * liq + 2 * pha * (1 - liq) 
+    double uc = underCool(nd->temp, mConfig.meltTemp);
+    //std::cout << "PhaseCoefficient is: " << mConfig.phaseCoefficient << std::endl;
+    double eLoc = mConfig.phaseCoefficient * 2*(
+        (-2 + 2*pha) * uc + (2 * pha * (1 - uc) )
     );
+    //std::cout << "Phase: " << pha <<  " uc: " << uc <<" Local Term1: " << eLoc << std::endl;
     double grainSum = 0.0;
     for (int g = 0; g < 9; g++) {
         grainSum += nd->exists*nd->grainPhases[g] * nd->grainPhases[g];
     }
-    eLoc += mConfig.grainPreCo * (-2 * (1 - pha) * grainSum) + (2*pha*part*part*mConfig.particleSolidIntEnergy+(-2+2*pha)*(part)*(part)*mConfig.particleLiquidIntEnergy);
-    double eGrad = (nd->neighbors[0]->phase +
-             nd->neighbors[1]->phase +
-             nd->neighbors[2]->phase +
-             nd->neighbors[3]->phase - (nd->neighbors[0]->exists + nd->neighbors[1]->exists + nd->neighbors[2]->exists + nd->neighbors[3]->exists) * pha) * mConfig.phaseGradCo;
-    double diffFree = eLoc + eGrad + nd->particleComp*nd->particleComp*2*nd->phase*mConfig.particleSolidIntEnergy; ;
-    //std::cout << "Phase Diff Energy: " << diffFree << std::endl;
-    return diffFree;
+    //std::cout << grainSum << std::endl;
 
-}
-
-
-
-std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
-    //std::cout << "Calculating Grain Diff Energy..." << std::endl;
-    std::array<double,9> diffFree;
-    std::array<double,4> grainGradVals {0,0,0,0};
-    double gra = 0;
-    int activeGrain = 0;
-    for (int g = 0; g < 9; g++) {
-        gra = nd->grainPhases[g];
-       
-        activeGrain = nd->activeGrains[g];
-
-        for (int gg = 0; gg < 9; gg++) {
-            if (activeGrain == nd->neighbors[0]->activeGrains[gg]) {
-                grainGradVals[0] = nd->neighbors[0]->grainPhases[gg];
-            }
-            if (activeGrain == nd->neighbors[1]->activeGrains[gg]) {
-                grainGradVals[1] = nd->neighbors[1]->grainPhases[gg];
-            }
-            if (activeGrain == nd->neighbors[2]->activeGrains[gg]) {
-                grainGradVals[2] = nd->neighbors[2]->grainPhases[gg];
-            }
-            if (activeGrain == nd->neighbors[3]->activeGrains[gg]) {
-                grainGradVals[3] = nd->neighbors[3]->grainPhases[gg];
-            }
-        }
-        double grainGrad = (
-            grainGradVals[0] + grainGradVals[1] + grainGradVals[2] + grainGradVals[3] -
-            (nd->neighbors[0]->exists + nd->neighbors[1]->exists + nd->neighbors[2]->exists + nd->neighbors[3]->exists) * nd->grainPhases[g]) * -1 * mConfig.grainGradCo;
-
-        double comp = sumOtherGrainsSquared(/*local slot index*/ g, *nd, 9);
-        double solid = 1.0 - ifLiq(nd->temp, mConfig.meltTemp);
-
-        double gbEnergy = calcGrainBoundaryEnergy(nd->orientations[g], {
-            0.5*(grainGradVals[0] + grainGradVals[1])-nd->grainPhases[g],
-            0.5*(grainGradVals[2] + grainGradVals[3])-nd->grainPhases[g]
-        });
-        grainGrad = grainGrad * gbEnergy;
-
-        double grainEnergy = mConfig.grainPreCo * (gra * gra * gra * gra - gra + (1000 / mConfig.cellArea) * gra * comp * gbEnergy * mConfig.grainIntWidth + 2 * gra * solid * solid);
-
-        diffFree[g] = mConfig.dt * (grainGrad + grainEnergy);
-        //std::cout << "Grain " << g << " Diff Energy: " << diffFree[g] << std::endl;
-        // treat negative activeGrain as "empty slot"
-        if (activeGrain < 0) {
-             diffFree[g] = 0;
-        }
-        
-    }
-    return diffFree;
-}
-
-
-double calcTemp(node* nd, config& modelConfig, int t) {
+    eLoc = eLoc + mConfig.phaseCoefficient * 2*(-2 * (1 - pha) * grainSum);
     
-    return modelConfig.startTemp + (nd->heightPos*modelConfig.tGrad*modelConfig.dx) - (t*modelConfig.coolingRate*modelConfig.dt);
-    
-}
+   double sizeScale = 0.66*4*3.14149 * pow(mConfig.particleRadius,2)/((4/3)*3.14159*pow(mConfig.particleRadius,3)); // surface area / volume
+     
 
-double calcParticleCompDiff(node* nd, config& modelConfig) {
-    // Return chemical potential (mu) for particle composition at this node,
-    // including a simple laplacian term using neighbors.
-    double c = nd->particleComp;
-    double pha = nd->phase;
-
-    // local chemical contribution: derivative of local energy w.r.t c
-    // energy density used previously: 2*c*pha^2*E_s + 2*c*(1-pha)^2*E_l
-    double mu_local = 2.0 * pha * pha * modelConfig.particleSolidIntEnergy
-                    + 2.0 * (1.0 - pha) * (1.0 - pha) * modelConfig.particleLiquidIntEnergy;
-
-    // gradient contribution (simple discrete Laplacian)
-    double sumNeighC = 0.0;
-    int nExist = 0;
+    eLoc = eLoc +  ((pha) * pow(part,2)*mConfig.particleSolidIntEnergy*sizeScale) + ((2*pha-2) * (pow(part,2))*mConfig.particleLiquidIntEnergy*sizeScale);
+    //std::cout << "After Grain and Particle Term: " << eLoc << std::endl;
+    // Simple 4-point Laplacian (von Neumann): neighbors 0,1,2,3 = left,right,up,down
+    double sumPh = 0.0;
+    int nCount = 0;
     for (int nb = 0; nb < 4; nb++) {
         node* nbr = nd->neighbors[nb];
         if (!nbr) continue;
-        if (nbr->exists == 0) continue; // treat boundary as no-flux
-        sumNeighC += nbr->particleComp;
-        nExist++;
+        if (nbr->exists == 0) continue;
+        sumPh += nbr->phase;
+        nCount++;
+    }
+    double lapPh = 0.0;
+    if (nCount > 0) {
+        lapPh = sumPh - nCount * pha;  // (sum of neighbors - 4*center)
+    }
+    lapPh *= (1/(mConfig.dx*mConfig.dx));
+    double eGrad = lapPh * mConfig.phaseGradCo;
+    //std::cout << "Phase Gradient Coefficient: " << mConfig.phaseGradCo << std::endl;
+    double diffFree = eLoc + eGrad;
+    //std::cout << "Phase Diff Energy: " << diffFree << " GradientTerm: " << eGrad << " Gradient:" << eGrad << std::endl ;
+    diffFree = safeClamp(diffFree, -1e8, 1e8);
+    return diffFree;
+ 
+ }
+ 
+ 
+
+ 
+std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
+    std::array<double,9> diffFree;
+    std::array<double,8> grainGradVals {0,0,0,0,0,0,0,0};
+
+    for (int g = 0; g < 9; g++) {
+        double gra = nd->grainPhases[g];
+        int activeGrain = nd->activeGrains[g];
+        double pha = nd->phase;
+        if(activeGrain < 0) {
+            diffFree[g] = 0.0;
+            continue; // skip inactive slot
+        }
+
+        // Gather neighbor grain phases for same active grain (4-point only)
+        double grainLeft = 0.0, grainRight = 0.0, grainUp = 0.0, grainDown = 0.0;
+        for(int gg = 0; gg < 9; gg++) {
+            node* nbrL = nd->neighbors[0];
+            if(nbrL && activeGrain == nbrL->activeGrains[gg]) grainLeft = nbrL->grainPhases[gg];
+            node* nbrR = nd->neighbors[1];
+            if(nbrR && activeGrain == nbrR->activeGrains[gg]) grainRight = nbrR->grainPhases[gg];
+            node* nbrU = nd->neighbors[2];
+            if(nbrU && activeGrain == nbrU->activeGrains[gg]) grainUp = nbrU->grainPhases[gg];
+            node* nbrD = nd->neighbors[3];
+            if(nbrD && activeGrain == nbrD->activeGrains[gg]) grainDown = nbrD->grainPhases[gg];
+        }
+
+        // Simple 4-point Laplacian (von Neumann)
+        double sumGr = grainLeft + grainRight + grainUp + grainDown;
+        int nCount = 0;
+        for(int nb = 0; nb < 4; nb++) {
+            node* nbr = nd->neighbors[nb];
+            if(nbr && nbr->exists != 0) nCount++;
+        }
+        double lapGr = 0.0;
+        if(nCount > 0) {
+            lapGr = sumGr - nCount * gra;  // (sum of neighbors - 4*center)
+        }
+        // Gradient term drives growth: negative Laplacian (center surrounded by grain) lowers energy
+        // Multiply by -1 so that lapGr > 0 (neighbors > center) makes grainGrad negative (lowers energy)
+        double grainGrad = -lapGr * mConfig.grainGradCo / (mConfig.dx * mConfig.dx);
+
+       double gx = 0.0, gy = 0.0, gz = 0.0;
+        double inv2dx = 0.5 / mConfig.dx;   // (right - left)/(2*dx)
+        double inv2dy = 0.5 / mConfig.dx;   // using dx for both dimensions assuming square grid
+
+        gx = (grainRight - grainLeft) * inv2dx;
+        gy = (grainDown  - grainUp)   * inv2dy;
+        // If you have any out-of-plane neighbor or z-derivative, compute gz similarly; otherwise leave gz=0.
+
+        // Pass full 3D gradient (physical units) to GB energy routine
+        std::array<double,3> localGrad3 = { gx, gy, gz };
+        double gbEnergy = calcGrainBoundaryEnergy(nd->orientations[g], localGrad3);
+
+        // continue using gbEnergy as you already do
+        if (gbEnergy < 2.92) {
+            std::cout << "Warning: Calculated GB energy below minimum. Clamping to minimum value." << std::endl;
+            gbEnergy = 2.92;
+        }
+        grainGrad = grainGrad * gbEnergy; // scale gradient by local GB energy
+        //std::cout << "Grain Gradient: " << grainGrad << std::endl;
+        // Compute interaction/comp terms
+        double comp = sumOtherGrainsSquared(g, *nd, 9);
+        double notUC = 1.0 - underCool(nd->temp, mConfig.meltTemp);
+        double grainEnergy = mConfig.grainPreCo *((pow(gra,3)-gra)+ (gra*comp*gbEnergy*mConfig.grainIntWidth) + gra*pow((1-pha),2));
+        grainGrad = safeClamp(grainGrad, -1e12, 1e12);
+        grainEnergy = safeClamp(grainEnergy, -1e12, 1e12);
+        diffFree[g] = grainGrad + grainEnergy;
+        //std::cout << " Diff Energy: " << diffFree[g] << " GrainEnergyTerm: " << grainEnergy << " GrainGradTerm: " << grainGrad << std::endl;
     }
 
-    double lapC = 0.0;
-    if (nExist > 0) {
-        lapC = (sumNeighC - nExist * c);
-    }
-
-    // coefficient for gradient term (tuneable)
-    const double particleGradCo = 1.0; // tune or move to config
-    mu_local += particleGradCo * lapC;
-
-    return mu_local;
+    return diffFree;
 }
+ 
+ 
+ double calcTemp(node* nd, config& modelConfig, int t) {
+     
+     return modelConfig.startTemp + (nd->heightPos*modelConfig.tGrad*modelConfig.dx) - (t*modelConfig.coolingRate*modelConfig.dt);
+     
+ }
+ 
+ double calcParticleCompDiff(node* nd, config& modelConfig) {
+     // Compute CHEMICAL POTENTIAL (μ) which drives particle motion
+     // Particles flow down the chemical potential gradient: J = -M * grad(μ)
+     // μ = ∂f/∂c where f is the free energy density
+     
+     double c = nd->particleComp;
+     double pha = nd->phase;
+     
+     // Chemical potential from local energy density:
+     // f_particle = 2*c*pha^2*E_solid + 2*c*(1-pha)^2*E_liquid
+     // ∂f/∂c = 2*pha^2*E_solid + 2*(1-pha)^2*E_liquid
+     double sizeScale = 0.66*4*3.14149 * pow(modelConfig.particleRadius,2)/((4/3)*3.14159*pow(modelConfig.particleRadius,3)); // surface area / volume
+     double muLocal = 2.0 *c * pha * pha * modelConfig.particleSolidIntEnergy*sizeScale
+                    + 2.0 *c * (1.0 - pha) * (1.0 - pha) * modelConfig.particleLiquidIntEnergy*sizeScale;
+     
+     // Add gradient (interfacial) contribution: particles also respond to composition gradients
+     // This provides a smoothing penalty for sharp concentration jumps
+     // Gradient energy = kappa * |grad(c)|^2, so ∂/∂c_i includes laplacian term
+     const double kappaParticle = 1e-8;  // interface energy coefficient (tune as needed)
+     double lapC = 0;
+     double sumNeighC = 0.0;
+ 
+\
+     int nExist = 0;
+     for (int nb = 0; nb < 4; nb++) {
+         node* nbr = nd->neighbors[nb];
+         if (!nbr) continue;
+         if (nbr->exists == 0) continue;
+         sumNeighC += nbr->particleComp;
+         nExist++;
+     }
+     lapC = sumNeighC - nExist * c;  // (sum of neighbors - 4*center)
+     lapC *= (1/(modelConfig.dx*modelConfig.dx));
+
+     
+    // Variational chemical potential: μ = ∂f/∂c - kappa * laplacian(c)
+    double mu = muLocal;
+
+    // Defensive checks: guard against NaN/Inf coming from bad inputs (e.g. uninitialized particle radius)
+    if (!std::isfinite(mu) || std::isnan(mu)) {
+        std::cerr << "[WARN] calcParticleCompDiff: non-finite mu at node id=" << nd->id
+                 // << "  muLocal=" << muLocal << "  lapC=" << lapC << "  pha=" << pha
+                  << "  c=" << c << "  particleRadius=" << modelConfig.particleRadius << "\n";
+        for (int nb = 0; nb < 4; ++nb) {
+            node* nbr = nd->neighbors[nb];
+            if (!nbr) continue;
+            std::cerr << "    nbr["<<nb<<"].id="<<(nbr->id) << " c=" << nbr->particleComp << " pha=" << nbr->phase << "\n";
+        }
+        // fallback to safe zero potential
+        mu = 0.0;
+    }
+
+    // clamp to avoid extremely large driving forces
+    mu = safeClamp(mu, -1e12, 1e12);
+    return mu;
+ }
 
 
 

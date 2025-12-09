@@ -1,7 +1,7 @@
 #pragma once
 #include "modelStartup.hpp"
 #include "gridField.hpp"
-double ifLiq(double temp, double meltTemp);
+double underCool(double temp, double meltTemp);
 
 double calcGrainBoundaryEnergy(eulerAngles orient, std::vector<double> gradient);
 
@@ -20,6 +20,7 @@ std::array<double,3> eulerRotate(eulerAngles orient, std::array<double,3> rotate
 double dotAngle(std::array<double,3> vec1, std::array<double,3> vec2);
 double calcParticleCompDiff(node* nd, config& modelConfig);
 double calcTemp(node* nd, config& modelConfig,int t);
+bool readCoeffs(const std::string &filename);
 
 
 inline double getPotentialWithLaplacian(gridField& field, config& modelConfig, int i, int j);

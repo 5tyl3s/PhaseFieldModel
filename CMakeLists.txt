@@ -1,33 +1,36 @@
 cmake_minimum_required(VERSION 3.10)
 project(PhaseFieldModel)
 
-# Set build type to Debug for better debugging information
-set(CMAKE_BUILD_TYPE Debug)
-
-# Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
-
-
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
-# Use MinGW-specific console subsystem flag
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--subsystem,console")
-
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Include directories
 include_directories(${PROJECT_SOURCE_DIR}/include)
+include_directories(C:/msys64/mingw64/include)
 
-# Collect all source files
-file(GLOB SOURCES 
-    "${PROJECT_SOURCE_DIR}/src/*.cpp"
+# Manual library paths for MSYS2 64-bit
+link_directories(C:/msys64/mingw64/lib)
+
+# Source files
+set(SOURCES
+    src/glVisualization.cpp
+    src/gridField.cpp
+    src/importConfig.cpp
+    src/main.cpp
+    src/model.cpp
+    src/modelStartup.cpp
 )
 
-# Print source files for debugging
-message(STATUS "Source files: ${SOURCES}")
-
-# Add executable
 add_executable(PhaseFieldModel ${SOURCES})
 
-# Add debug flags
+# Link libraries directly
+target_link_libraries(PhaseFieldModel PRIVATE
+    glfw3
+    glew32
+    opengl32
+)
+
+# OpenMP
+find_package(OpenMP REQUIRED)
+target_link_libraries(PhaseFieldModel PRIVATE OpenMP::OpenMP_CXX)
 
