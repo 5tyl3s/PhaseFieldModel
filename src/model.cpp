@@ -227,9 +227,11 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     double pha = nd->phase;
     double part = nd->particleComp;
     double uc = underCool(nd->temp, mConfig.meltTemp);
+    double driveToLiq = 1000*(0.0349*nd->temp - 101.0704)/mConfig.molarVolume; // J/m^3
+    double driveToSol = 1000*(-0.0212 *nd->temp + 61.3952)/mConfig.molarVolume; // J/m^3
     //std::cout << "PhaseCoefficient is: " << mConfig.phaseCoefficient << std::endl;
-    double eLoc = mConfig.phaseCoefficient * 2*(
-        (-2 + 2*pha) * uc + (2 * pha * (1 - uc) )
+    double eLoc = (
+        (-2 + 2*pha) * uc * driveToSol  + (2 * pha * (1 - uc)*driveToLiq )
     );
     //std::cout << "Phase: " << pha <<  " uc: " << uc <<" Local Term1: " << eLoc << std::endl;
     double grainSum = 0.0;
@@ -238,7 +240,7 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     }
     //std::cout << grainSum << std::endl;
 
-    eLoc = eLoc + mConfig.phaseCoefficient * 2*(-2 * (1 - pha) * grainSum);
+    eLoc = eLoc + mConfig.phaseCoefficient * 2*((2* pha-2) * grainSum);
     
    double sizeScale = 0.66*4*3.14149 * pow(mConfig.particleRadius,2)/((4/3)*3.14159*pow(mConfig.particleRadius,3)); // surface area / volume
      
@@ -335,7 +337,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
         // Compute interaction/comp terms
         double comp = sumOtherGrainsSquared(g, *nd, 9);
         double notUC = 1.0 - underCool(nd->temp, mConfig.meltTemp);
-        double grainEnergy = mConfig.grainPreCo *((pow(gra,3)-gra)+ (gra*comp*gbEnergy*mConfig.grainIntWidth) + gra*pow((1-pha),2));
+        double grainEnergy = mConfig.grainPreCo *((pow(gra,3)-gra)+ (2*gra*pow(comp,2)*gbEnergy*mConfig.grainIntWidth) + (2*gra-2)*pow((pha),2)+(2*gra)*pow((1-pha),2));
         grainGrad = safeClamp(grainGrad, -1e12, 1e12);
         grainEnergy = safeClamp(grainEnergy, -1e12, 1e12);
         diffFree[g] = grainGrad + grainEnergy;

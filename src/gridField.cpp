@@ -156,18 +156,18 @@ void gridField::update(
         if (!n) continue;
         
         // update phase
-        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[ptr]*5e-20;
+        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[ptr]*1e-19;
 
         // update grain phases
         for (int g = 0; g < 9; g++) {
-            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[ptr][g]*1e-19);
+            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[ptr][g]*1e-20);
         }
     }
 
     // THERMODYNAMIC particle update: dC/dt = mobility * laplacian(μ)
     // Particles flow DOWN the chemical potential gradient to minimize free energy
     // μ is computed in calcParticleCompDiff() and stored in tempPartComp array
-    const double particleMobilityLiquid = 5e-19;   // high mobility in liquid
+    const double particleMobilityLiquid = 5e-32;   // high mobility in liquid
     const double particleMobilitySolid = 1e-28;    // lower mobility in solid
     double dx = mConfig.dx;
     double denom = (dx * dx);
@@ -208,7 +208,7 @@ void gridField::update(
         double flux = mobility * lapMu / denom;
         
         // Store change
-        particleCompChange[ptr] = -1*mConfig.dt * flux;
+        particleCompChange[ptr] = mConfig.dt * flux;
     }
     
     // Apply changes TOGETHER to preserve global sum
@@ -242,7 +242,7 @@ void gridField::update(
                 n->grainPhases[g] = 0.0;
             }
 
-            if (n->grainPhases[g] > 1e-16) {
+            if (n->grainPhases[g] > 0.01) {
                 // try to add this grain (by global id) to neighbors if not already present
                 for (int nb = 0; nb < 8; nb++) {
                     node* nbr = n->neighbors[nb];
@@ -295,10 +295,10 @@ float node::calcNucRate(config modelConf) {
     double h  = 6.62607015e-34;      // Planck constant (J·s)
     double NA = 6.02214076e23;       // Avogadro (1/mol)
 
-    // Driving force (J/m^3)
-    double dForceMo = modelConf.drivingForceSlopek * temp
-                    + modelConf.drivingForceIntercept;
-    dForceMo = 1000.0 * dForceMo / modelConf.molarVolume;
+    // Driving force (J/m^3) from J/mol to J/m^3
+    double dForceMo = (modelConf.drivingForceSlopek * temp
+                     + modelConf.drivingForceIntercept)*5000/modelConf.molarVolume;
+    
 
     // === 3D modification: use cell *volume*, not area ===
     double cellVolume = pow(modelConf.dx,3);
@@ -310,7 +310,7 @@ float node::calcNucRate(config modelConf) {
     double numAtoms = atomicDensity * cellVolume;
 
     // Interfacial energy γ (J/m^2)
-    double gamma = modelConf.liqSolIntE;
+    double gamma = 0.05;
 
     // === 3D spherical nucleus ΔG* ===
     double dGstar = (16.0 * 3.141592 * pow(gamma, 3.0)) /
@@ -324,7 +324,7 @@ float node::calcNucRate(config modelConf) {
     double prefactor = (k * temp / h) * numAtoms;
 
     // CNT rate: I = A * exp(−ΔG* / kT)
-    double rate = prefactor * diffTerm * exp(-dGstar / (k * temp));
+    double rate =prefactor * diffTerm * exp(-dGstar / (k * temp));
     //std::cout << "Nucleation Rate at Temp " << temp << " K: " << rate << " nuclei/m^3/s\n";
     return (float)rate;
 }

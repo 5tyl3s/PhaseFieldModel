@@ -62,9 +62,9 @@
   "tempGradKperm": 100000.0,
 
   "molarMass": 95.95,
-  "drivingForceSlopek": 13.8,
-  "drivingForceIntercept": 39842,
+  "drivingForceSlopek": -0.0212,
+  "drivingForceIntercept": 61.3952,
 
-  "particleSolidIntEnergy": 1,
-  "particleLiqIntEnergy": 0.1
+  "particleSolidIntEnergy": 0.1,
+  "particleLiqIntEnergy": 0.01
 }
