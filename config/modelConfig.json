@@ -57,7 +57,7 @@
   "diffusionActivationEnergy": 1.5,
   "TimeSteps": 100000,
 
-  "CoolingRatempers": 1,
+  "CoolingRatempers": 3,
   "MinimumTempK": 100,
   "tempGradKperm": 100000.0,
 
