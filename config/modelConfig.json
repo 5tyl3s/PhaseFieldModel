@@ -31,7 +31,7 @@
   },
 
   "dx_um": 1,
-  "dt_s": 1e-3,
+  "dt_s": 0.00000001,
   "startTempK": 2896,
   "meltTemp": 2896,
 
@@ -55,9 +55,9 @@
   "BasePlateTempK": 500.0,
 
   "diffusionActivationEnergy": 1.5,
-  "TimeSteps": 100000,
+  "TimeSteps": 10000000,
 
-  "CoolingRatempers": 3,
+  "CoolingRatempers": 0.3,
   "MinimumTempK": 100,
   "tempGradKperm": 100000.0,
 
@@ -65,6 +65,6 @@
   "drivingForceSlopek": -0.0212,
   "drivingForceIntercept": 61.3952,
 
-  "particleSolidIntEnergy": 0.1,
-  "particleLiqIntEnergy": 0.01
+  "particleSolidIntEnergy": 0.5,
+  "particleLiqIntEnergy": 0.1
 }

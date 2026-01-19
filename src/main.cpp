@@ -297,7 +297,91 @@ int main() {
     std::cout << "Calc Completed, Saved Data";
     output_file4   .close();
 
-    
+    // --- Write grain orientations (Euler angles + quaternion) ---
+    int nGrains = globalField.numGrains;
+    if (nGrains > 0) {
+        std::vector<bool> found(nGrains, false);
+        std::vector<eulerAngles> eulers(nGrains);
+        std::vector<int> counts(nGrains, 0);
+
+        for (int i = 0; i < GRID_ROWS; ++i) {
+            for (int j = 0; j < GRID_COLS; ++j) {
+                node &nd = globalField.grid[i][j];
+                for (int s = 0; s < nd.grainsHere; ++s) {
+                    int gid = nd.activeGrains[s];
+                    if (gid < 0 || gid >= nGrains) continue;
+                    counts[gid]++;
+                    if (!found[gid]) {
+                        found[gid] = true;
+                        eulers[gid] = nd.orientations[s];
+                    }
+                }
+            }
+        }
+
+        std::ofstream outG("GrainOrientations.csv");
+        if (!outG.is_open()) std::cerr << "Error: Could not open GrainOrientations.csv for writing" << std::endl;
+        else {
+            outG << "grain_id,theta1_deg,Phi_deg,theta2_deg,q0,q1,q2,q3,node_count\n";
+            for (int gid = 0; gid < nGrains; ++gid) {
+                if (!found[gid]) {
+                    outG << gid << ",NaN,NaN,NaN,NaN,NaN,NaN,NaN,0\n";
+                    continue;
+                }
+                double phi1 = eulers[gid].theta1 * M_PI / 180.0;
+                double Phi  = eulers[gid].phi    * M_PI / 180.0;
+                double phi2 = eulers[gid].theta2 * M_PI / 180.0;
+
+                double c1 = cos(phi1), s1 = sin(phi1);
+                double cP = cos(Phi),  sP = sin(Phi);
+                double c2 = cos(phi2), s2 = sin(phi2);
+
+                double R00 = c1*c2 - s1*s2*cP;
+                double R01 = -c1*s2 - s1*c2*cP;
+                double R02 = s1*sP;
+                double R10 = s1*c2 + c1*s2*cP;
+                double R11 = -s1*s2 + c1*c2*cP;
+                double R12 = -c1*sP;
+                double R20 = s2*sP;
+                double R21 = c2*sP;
+                double R22 = cP;
+
+                // Quaternion from rotation matrix (w, x, y, z)
+                double tr = R00 + R11 + R22;
+                double qw, qx, qy, qz;
+                if (tr > 0.0) {
+                    double S = std::sqrt(tr + 1.0) * 2.0; // S=4*qw
+                    qw = 0.25 * S;
+                    qx = (R21 - R12) / S;
+                    qy = (R02 - R20) / S;
+                    qz = (R10 - R01) / S;
+                } else if ((R00 > R11) & (R00 > R22)) {
+                    double S = std::sqrt(1.0 + R00 - R11 - R22) * 2.0; // S=4*qx
+                    qw = (R21 - R12) / S;
+                    qx = 0.25 * S;
+                    qy = (R01 + R10) / S;
+                    qz = (R02 + R20) / S;
+                } else if (R11 > R22) {
+                    double S = std::sqrt(1.0 + R11 - R00 - R22) * 2.0; // S=4*qy
+                    qw = (R02 - R20) / S;
+                    qx = (R01 + R10) / S;
+                    qy = 0.25 * S;
+                    qz = (R12 + R21) / S;
+                } else {
+                    double S = std::sqrt(1.0 + R22 - R00 - R11) * 2.0; // S=4*qz
+                    qw = (R10 - R01) / S;
+                    qx = (R02 + R20) / S;
+                    qy = (R12 + R21) / S;
+                    qz = 0.25 * S;
+                }
+
+                outG << gid << "," << eulers[gid].theta1 << "," << eulers[gid].phi << "," << eulers[gid].theta2 << ","
+                     << qw << "," << qx << "," << qy << "," << qz << "," << counts[gid] << "\n";
+            }
+            outG.close();
+        }
+    }
+
     std::cout << "Elapsed(ms)=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start1).count() << std::endl;
     return 0;
 }

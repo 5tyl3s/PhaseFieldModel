@@ -53,6 +53,7 @@ struct config {
     double molarVolume;
     double diffusionActivationEnergy;
     double particleDiameter; //m
+    double hetNucUnderCooling;
 
 };
 

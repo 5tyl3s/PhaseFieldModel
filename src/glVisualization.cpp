@@ -395,18 +395,84 @@ void GLVisualizer::updateTextureTemp(GLuint textureID, const std::vector<std::ve
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-// Phase & Particle: blue (0) -> yellow (1) mapping (r=v, g=v, b=1-v)
+// Phase & Particle: blue (0) -> yellow (max) mapping (r=v, g=v, b=1-v). Min fixed at 0.0; max computed from data for particle scaling.
 void GLVisualizer::updateTextureBlueYellow(GLuint textureID, const std::vector<std::vector<float>>& data) {
     std::vector<unsigned char> pixelData;
     pixelData.reserve(gridRows * gridCols * 4);
 
+    // Keep min fixed at 0 so particle maps start at 0; compute max from data
     float minVal = 0.0f;
-    float maxVal = 1.0f;
+    float maxVal = 0.0f;
+    for (const auto& row : data) {
+        for (float v : row) {
+            if (v > maxVal) maxVal = v;
+        }
+    }
+    // Avoid division by zero when all values are at or below minVal
+    if (maxVal <= minVal) maxVal = minVal + 1.0f;
 
     for (int i = 0; i < gridRows; ++i) {
         for (int j = 0; j < gridCols; ++j) {
             float v = data[i][j];
             float norm = (v - minVal) / (maxVal - minVal);
+            if (norm < 0.0f) norm = 0.0f;
+            if (norm > 1.0f) norm = 1.0f;
+            unsigned char r = static_cast<unsigned char>(std::round(255.0f * norm));       // r = v
+            unsigned char g = static_cast<unsigned char>(std::round(255.0f * norm));       // g = v
+            unsigned char b = static_cast<unsigned char>(std::round(255.0f * (1.0f - norm))); // b = 1-v
+            pixelData.push_back(r);
+            pixelData.push_back(g);
+            pixelData.push_back(b);
+            pixelData.push_back(255);
+        }
+    }
+
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, gridCols, gridRows, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+// Log-scaled Phase/Particle: blue (0) -> yellow (max) mapping using log10 scale for positive values
+void GLVisualizer::updateTextureBlueYellowLog(GLuint textureID, const std::vector<std::vector<float>>& data) {
+    std::vector<unsigned char> pixelData;
+    pixelData.reserve(gridRows * gridCols * 4);
+
+    // Keep min fixed at 0 so particle maps start at 0; compute max and smallest positive value from data
+    float minVal = 0.0f;
+    float maxVal = 0.0f;
+    float minPositive = 1e30f;
+    for (const auto& row : data) {
+        for (float v : row) {
+            if (v > maxVal) maxVal = v;
+            if (v > 0.0f && v < minPositive) minPositive = v;
+        }
+    }
+    // If there are no positive values, set sensible defaults to avoid division by zero
+    if (maxVal <= 0.0f) {
+        maxVal = 1.0f;
+        minPositive = maxVal;
+    }
+    if (minPositive == 1e30f) minPositive = maxVal;
+
+    constexpr float eps = 1e-12f;
+    float logMin = std::log(std::max(minPositive, eps));
+    float logMax = std::log(std::max(maxVal, eps));
+    if (logMax <= logMin) logMax = logMin + 1.0f;
+
+    for (int i = 0; i < gridRows; ++i) {
+        for (int j = 0; j < gridCols; ++j) {
+            float v = data[i][j];
+            float norm;
+            if (v <= 0.0f) {
+                norm = 0.0f; // map non-positive values to the bottom of the scale
+            } else {
+                norm = (std::log(std::max(v, eps)) - logMin) / (logMax - logMin);
+            }
             if (norm < 0.0f) norm = 0.0f;
             if (norm > 1.0f) norm = 1.0f;
             unsigned char r = static_cast<unsigned char>(std::round(255.0f * norm));       // r = v
@@ -614,7 +680,7 @@ void GLVisualizer::updateFromGrid(const gridField& field) {
     glBindTexture(GL_TEXTURE_2D, 0);
 
     updateTextureTemp(textureTemp, temp, maxTemp);
-    updateTextureBlueYellow(textureParticle, particle);
+    updateTextureBlueYellowLog(textureParticle, particle);
 }
 
 void GLVisualizer::render() {

@@ -56,6 +56,7 @@ private:
     void updateTexture(GLuint textureID, const std::vector<std::vector<float>>& data);
     void updateTextureTemp(GLuint textureID, const std::vector<std::vector<float>>& data, float startTemp);
     void updateTextureBlueYellow(GLuint textureID, const std::vector<std::vector<float>>& data);
+    void updateTextureBlueYellowLog(GLuint textureID, const std::vector<std::vector<float>>& data);
     void updateTextureGrain(GLuint textureID, const std::vector<std::vector<float>>& data);
     void loadCSV(const std::string& filepath, std::vector<std::vector<std::vector<float>>>& out);
     std::string getShaderInfoLog(GLuint shader);

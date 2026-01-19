@@ -103,7 +103,7 @@ void gridField::addGrain(node* nucleus) {
     // Initialize the grain at the nucleus location
     nucleus->grainsHere = nucleus->grainsHere + 1;
     nucleus->activeGrains[nucleus->grainsHere-1] = numGrains-1;
-    nucleus->grainPhases[nucleus->grainsHere-1] = 1;
+    nucleus->grainPhases[nucleus->grainsHere-1] = 0.6;
     nucleus->phase = 1;
     nucleus->orientations[nucleus->grainsHere-1] = tempRots;
 
@@ -156,19 +156,19 @@ void gridField::update(
         if (!n) continue;
         
         // update phase
-        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[ptr]*1e-19;
+        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[ptr]*1.6e-16;
 
         // update grain phases
         for (int g = 0; g < 9; g++) {
-            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[ptr][g]*1e-20);
+            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[ptr][g]*5e-15);
         }
     }
 
     // THERMODYNAMIC particle update: dC/dt = mobility * laplacian(μ)
     // Particles flow DOWN the chemical potential gradient to minimize free energy
     // μ is computed in calcParticleCompDiff() and stored in tempPartComp array
-    const double particleMobilityLiquid = 5e-32;   // high mobility in liquid
-    const double particleMobilitySolid = 1e-28;    // lower mobility in solid
+    const double particleMobilityLiquid = 1e-12;   // high mobility in liquid
+    const double particleMobilitySolid = 1e-24;    // lower mobility in solid
     double dx = mConfig.dx;
     double denom = (dx * dx);
     
@@ -182,7 +182,7 @@ void gridField::update(
 
         // tempPartComp[ptr] contains the chemical potential μ at this node
         double mu = tempPartComp[ptr];
-        
+
         // Compute 4-point Laplacian of chemical potential
         double sumNeighMu = 0.0;
         int nExist = 0;
@@ -198,7 +198,7 @@ void gridField::update(
         if (nExist > 0) {
             lapMu = (sumNeighMu - nExist * mu);  // (sum of 4 neighbors - 4*center)
         }
-
+     
         // Choose mobility based on phase (liquid vs solid)
         double liquidFrac = (1.0 - n->phase);  // 1 in liquid, 0 in solid
         double mobility = particleMobilityLiquid * liquidFrac + particleMobilitySolid * (1.0 - liquidFrac);
@@ -215,7 +215,7 @@ void gridField::update(
     for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
         node* n = allNodes[ptr];
         if (!n) continue;
-        n->particleComp += particleCompChange[ptr];
+        n->particleComp = n->particleComp + particleCompChange[ptr];
         
         // Clamp to [0, 1] to prevent unphysical values
         if (n->particleComp < 0.0) n->particleComp = 0.0;
@@ -276,6 +276,9 @@ void gridField::update(
             }
              
             if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,3) * mConfig.dt * n->calcNucRate(mConfig) * -1))) { 
+                 addGrain(n);
+             }
+            if (!grainExists && (1000*(-0.0212 *n->temp + 61.3952)/mConfig.molarVolume + mConfig.hetNucUnderCooling) < 0 && prob_dist(gen) < mConfig.dt*n->particleComp) { 
                  addGrain(n);
              }
          }

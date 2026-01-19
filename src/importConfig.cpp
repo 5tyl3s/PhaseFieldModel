@@ -105,7 +105,7 @@ config inputConfig(std::string configSource) {
     // Read values with defaults
     // -----------------------------
     newConfig.dx = readOr<double>(j, "dx_um", 1.0) * 1e-6;
-    newConfig.dt = readOr<double>(j, "dt_s", 1e-12);
+    newConfig.dt = readOr<double>(j, "dt_s", 1e-3);
     newConfig.startTemp = readOr<double>(j, "startTempK", 2896);
     newConfig.kSolid = readOr<double>(j, "solidConductivityWMK", 138);
     newConfig.cellHeight = readOr<double>(j, "cellHeightum", 50) * 1e-6;
@@ -146,7 +146,7 @@ config inputConfig(std::string configSource) {
     newConfig.timeSteps = readOr<int>(j, "TimeSteps", 1000);
     newConfig.homoNucCoeff = readOr<double>(j, "HomogeneousNucleationCoefficient", 1e20);
     newConfig.underCoolReq = readOr<double>(j, "UndercoolingRequirement", 1);
-    newConfig.coolingRate = readOr<double>(j, "CoolingRatempers", 3e11);
+    newConfig.coolingRate = readOr<double>(j, "CoolingRatempers", 0.3);
     newConfig.tGrad = readOr<double>(j, "tempGradKperm", 20000);
     newConfig.minTemp = readOr<double>(j, "MinimumTempK", 100);
 
@@ -167,6 +167,7 @@ config inputConfig(std::string configSource) {
     newConfig.steps = {height, width};
     newConfig.totalSteps = height * width;
 
+    newConfig.hetNucUnderCooling = (3.1415*pow(newConfig.particleRadius,2)*(newConfig.particleSolidIntEnergy - newConfig.particleLiquidIntEnergy)) - (3.14159 * pow((newConfig.particleRadius+ 0.3e-9),2) * newConfig.liqSolIntE);
     newConfig.success = 1; // successful load
     return newConfig;
 }

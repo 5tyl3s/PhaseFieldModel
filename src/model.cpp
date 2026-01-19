@@ -240,7 +240,7 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     }
     //std::cout << grainSum << std::endl;
 
-    eLoc = eLoc + mConfig.phaseCoefficient *((2* pha-2) * grainSum);
+    eLoc = eLoc + mConfig.phaseCoefficient *10000*((2* pha-2) * grainSum)+(2*pha* (1 - grainSum));
     
    double sizeScale = 0.66*4*3.14149 * pow(mConfig.particleRadius,2)/((4/3)*3.14159*pow(mConfig.particleRadius,3)); // surface area / volume
      
@@ -309,7 +309,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
         }
 
         // Simple 4-point Laplacian (von Neumann)
-        double sumGr = grainLeft + grainRight + grainUp + grainDown + 0.5*(grainUpLeft + grainUpRight + grainDownLeft + grainDownRight);
+        double sumGr = grainLeft + grainRight + grainUp + grainDown + 0.7071*(grainUpLeft + grainUpRight + grainDownLeft + grainDownRight);
         int nCount = 0;
         for(int nb = 0; nb < 4; nb++) {
             node* nbr = nd->neighbors[nb];
@@ -349,12 +349,12 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
             std::cout << "Warning: Calculated GB energy below minimum. Clamping to minimum value." << std::endl;
             gbEnergy = 2.92;
         }
-        grainGrad = grainGrad * gbEnergy*0.1; // scale gradient by local GB energy
+        grainGrad = grainGrad * gbEnergy*3; // scale gradient by local GB energy
         //std::cout << "Grain Gradient: " << grainGrad << std::endl;
         // Compute interaction/comp terms
         double comp = sumOtherGrainsSquared(g, *nd, 9);
         double notUC = 1.0 - underCool(nd->temp, mConfig.meltTemp);
-        double grainEnergy = mConfig.grainPreCo *((pow(gra,3)-gra)+ (200*gra*pow(comp,2)*mConfig.grainIntWidth) + (2*gra-2)*pow((pha),2)+(2*gra)*pow((1-pha),2));
+        double grainEnergy = mConfig.grainPreCo*((pow(gra,3)-gra)*underCool(nd->temp, mConfig.meltTemp) + (gra*pow(comp,2)*mConfig.grainIntWidth) );
         grainGrad = safeClamp(grainGrad, -1e12, 1e12);
         grainEnergy = safeClamp(grainEnergy, -1e12, 1e12);
         diffFree[g] = grainGrad + grainEnergy;
@@ -367,7 +367,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
  
  double calcTemp(node* nd, config& modelConfig, int t) {
      
-     return modelConfig.startTemp + (nd->heightPos*modelConfig.tGrad*modelConfig.dx) - (t*modelConfig.coolingRate*modelConfig.dt);
+     return modelConfig.startTemp + ((nd->heightPos)*modelConfig.tGrad*modelConfig.dx) - modelConfig.tGrad*modelConfig.coolingRate* (modelConfig.dt*t);
      
  }
  
@@ -393,7 +393,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
      double lapC = 0;
      double sumNeighC = 0.0;
  
-\
+
      int nExist = 0;
      for (int nb = 0; nb < 4; nb++) {
          node* nbr = nd->neighbors[nb];
