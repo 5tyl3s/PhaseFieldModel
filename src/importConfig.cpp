@@ -88,7 +88,9 @@ config inputConfig(std::string configSource) {
         configOut << "  \"drivingForceIntercept\": 39842,\n";
         configOut << "  \"particleSolidIntEnergy\": 2.0,\n";
         configOut << "  \"particleLiqIntEnergy\": 1.0,\n";
-        configOut << "  \"GrainBarrierHeightCoefficient\": 0.125\n";
+        configOut << "  \"GrainBarrierHeightCoefficient\": 0.125,\n";
+        configOut << "  \"enableVisualization\": true,\n";
+        configOut << "  \"enableProfiling\": true\n";
         configOut << "}\n";
         configOut.close();
         std::cout << "[config] Default config created. Please edit and re-run program.\n";
@@ -168,6 +170,11 @@ config inputConfig(std::string configSource) {
     newConfig.totalSteps = height * width;
 
     newConfig.hetNucUnderCooling = (3.1415*pow(newConfig.particleRadius,2)*(newConfig.particleSolidIntEnergy - newConfig.particleLiquidIntEnergy)) - (3.14159 * pow((newConfig.particleRadius+ 0.3e-9),2) * newConfig.liqSolIntE);
+    
+    // Configuration flags
+    newConfig.enableVisualization = readOr<bool>(j, "enableVisualization", true);
+    newConfig.enableProfiling = readOr<bool>(j, "enableProfiling", true);
+    
     newConfig.success = 1; // successful load
     return newConfig;
 }

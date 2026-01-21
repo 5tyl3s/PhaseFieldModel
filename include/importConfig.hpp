@@ -54,6 +54,10 @@ struct config {
     double diffusionActivationEnergy;
     double particleDiameter; //m
     double hetNucUnderCooling;
+    
+    // Configuration flags
+    bool enableVisualization;  // Enable/disable live visualization
+    bool enableProfiling;      // Enable/disable performance profiling
 
 };
 

@@ -86,6 +86,7 @@ void gridField::init(config modelConfig) {
             grid[ik][jk].activeGrains = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
             grid[ik][jk].id = ik * GRID_COLS + jk;
             grid[ik][jk].heightPos = ik;
+            grid[ik][jk].temp = 0.0;
             // Initialize temperature: startTemp + vertical temperature gradient
             grid[ik][jk].temp = modelConfig.startTemp + (ik * modelConfig.tGrad * modelConfig.dx);
         };
@@ -105,6 +106,7 @@ void gridField::addGrain(node* nucleus) {
     nucleus->activeGrains[nucleus->grainsHere-1] = numGrains-1;
     nucleus->grainPhases[nucleus->grainsHere-1] = 0.6;
     nucleus->phase = 1;
+    nucleus->sumGrains = nucleus->sumGrains + 1;
     nucleus->orientations[nucleus->grainsHere-1] = tempRots;
 
     nucleus->neighbors[0]->grainsHere = nucleus->neighbors[0]->grainsHere + 1;
@@ -140,7 +142,8 @@ void gridField::update(
     std::array<double, TOTAL_NODES> &phaseDiffEn,
     std::array<std::array<double,9>, TOTAL_NODES> &grainDiffEn,
     std::array<double, TOTAL_NODES> &tempPartComp, // now holds chemical potential μ at each node
-    std::array<double, TOTAL_NODES> &tGrad
+    std::array<double, TOTAL_NODES> &tGrad,
+    bool enableProfiling
 ) {
 
     std::random_device rd;
@@ -149,10 +152,18 @@ void gridField::update(
     bool flip;
     bool grainExists = 0;
 
+    // Performance profiling
+    static long long totalFirstUpdateTime = 0;
+    static long long totalParticleUpdateTime = 0;
+    static long long totalPropagateGrainTime = 0;
+    static int profileCount = 0;
+
     // use compile-time TOTAL_NODES from header
-    for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
+    node* n;
+    #pragma omp parallel for private(n)
+    for (int node = 0; node < TOTAL_NODES; node++) {
+        n = globalField.allNodes[node];
         // make sure pointer is valid (defensive)
-        node* n = allNodes[ptr];
         if (!n) continue;
         
         // update phase
@@ -160,9 +171,14 @@ void gridField::update(
 
         // update grain phases
         for (int g = 0; g < 9; g++) {
-            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[ptr][g]*5e-15);
+            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*5e-15);
+            #pragma omp atomic
+            n->sumGrains = n->sumGrains - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*5e-15);
         }
     }
+
+    // Profiling: Track time for first update (phase and grain updates)
+    auto t1_start = std::chrono::steady_clock::now();
 
     // THERMODYNAMIC particle update: dC/dt = mobility * laplacian(μ)
     // Particles flow DOWN the chemical potential gradient to minimize free energy
@@ -176,6 +192,7 @@ void gridField::update(
     std::array<double, TOTAL_NODES> particleCompChange;
     particleCompChange.fill(0.0);
     
+    #pragma omp parallel for
     for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
         node* n = allNodes[ptr];
         if (!n) continue;
@@ -211,8 +228,17 @@ void gridField::update(
         particleCompChange[ptr] = mConfig.dt * flux;
     }
     
+    auto t1_end = std::chrono::steady_clock::now();
+    if (enableProfiling) {
+        totalFirstUpdateTime += std::chrono::duration_cast<std::chrono::microseconds>(t1_end - t1_start).count();
+    }
+
+    // Profiling: Track time for particle composition updates
+    auto t2_start = std::chrono::steady_clock::now();
+    
     // Apply changes TOGETHER to preserve global sum
     double globAvailPart = 0.0;
+    #pragma omp parallel for
     for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
         node* n = allNodes[ptr];
         if (!n) continue;
@@ -223,6 +249,14 @@ void gridField::update(
         if (n->particleComp < 0.0) n->particleComp = 0.0;
         if (n->particleComp > 1.0) n->particleComp = 1.0;
     }
+
+    auto t2_end = std::chrono::steady_clock::now();
+    if (enableProfiling) {
+        totalParticleUpdateTime += std::chrono::duration_cast<std::chrono::microseconds>(t2_end - t2_start).count();
+    }
+
+    // Profiling: Track time for grain propagation and nucleation
+    auto t3_start = std::chrono::steady_clock::now();
 
     // second pass: clamp values and propagate active grains / nucleation
     for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
@@ -296,6 +330,40 @@ void gridField::update(
          
      }
 
+    auto t3_end = std::chrono::steady_clock::now();
+    if (enableProfiling) {
+        totalPropagateGrainTime += std::chrono::duration_cast<std::chrono::microseconds>(t3_end - t3_start).count();
+    }
+
+    // Report performance every 1000 updates
+    if (enableProfiling) {
+        profileCount++;
+        if (profileCount >= 1000) {
+            long long avgDiffEn = diffEnergyTime;
+            long long avgFirstUpd = totalFirstUpdateTime / profileCount;
+            long long avgPartUpd = totalParticleUpdateTime / profileCount;
+            long long avgPropGrain = totalPropagateGrainTime / profileCount;
+            
+            std::cout << "\n=== Performance Profile (average over " << profileCount << " updates) ===" << std::endl;
+            std::cout << "  Diff Energy Calculation: " << avgDiffEn << " μs" << std::endl;
+            std::cout << "  First Update (Phase/Grain): " << avgFirstUpd << " μs" << std::endl;
+            std::cout << "  Particle Composition Update: " << avgPartUpd << " μs" << std::endl;
+            std::cout << "  Propagate Active Grain/Nucleation: " << avgPropGrain << " μs" << std::endl;
+            std::cout << "  Total: " << (avgDiffEn + avgFirstUpd + avgPartUpd + avgPropGrain) << " μs" << std::endl;
+            std::cout << "======================================\n" << std::endl;
+            
+            // Reset counters
+            totalFirstUpdateTime = 0;
+            totalParticleUpdateTime = 0;
+            totalPropagateGrainTime = 0;
+            profileCount = 0;
+        }
+    }
+
+}
+
+void gridField::recordDiffEnergyTime(long long timeMs) {
+    diffEnergyTime = timeMs;
 }
 
 

@@ -19,6 +19,7 @@ struct node {
     double phase;
     double particleComp;
     double exists;
+    int sumGrains;
     int grainsHere;
     int heightPos;
 
@@ -40,6 +41,7 @@ struct gridField {
     node top;
     node bottom;
     std::array<int,2> grainLocTemporary;
+    long long diffEnergyTime;  // Store diff energy calculation time
 
     void buildGrid();
     void init(config modelConfig);
@@ -48,9 +50,10 @@ struct gridField {
         std::array<double, TOTAL_NODES> &phaseDiffEn,
         std::array<std::array<double,9>, TOTAL_NODES> &grainDiffEn,
         std::array<double, TOTAL_NODES> &tempPartComp,
-        std::array<double, TOTAL_NODES> &tGrad
+        std::array<double, TOTAL_NODES> &tGrad,
+        bool enableProfiling = true
     );
-};
+    void recordDiffEnergyTime(long long timeMs);};
 
 // Declare global variable (but don't allocate it here)
 extern gridField globalField;
