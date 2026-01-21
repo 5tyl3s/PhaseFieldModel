@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Work/PhaseField/PhaseFieldModel/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -156,7 +156,7 @@ void gridField::update(
         if (!n) continue;
         
         // update phase
-        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[ptr]*1.6e-16;
+        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[ptr]*2e-16;
 
         // update grain phases
         for (int g = 0; g < 9; g++) {
@@ -212,10 +212,12 @@ void gridField::update(
     }
     
     // Apply changes TOGETHER to preserve global sum
+    double globAvailPart = 0.0;
     for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
         node* n = allNodes[ptr];
         if (!n) continue;
         n->particleComp = n->particleComp + particleCompChange[ptr];
+        globAvailPart += n->particleComp*(1-n->phase);
         
         // Clamp to [0, 1] to prevent unphysical values
         if (n->particleComp < 0.0) n->particleComp = 0.0;
@@ -278,8 +280,13 @@ void gridField::update(
             if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,3) * mConfig.dt * n->calcNucRate(mConfig) * -1))) { 
                  addGrain(n);
              }
-            if (!grainExists && (1000*(-0.0212 *n->temp + 61.3952)/mConfig.molarVolume + mConfig.hetNucUnderCooling) < 0 && prob_dist(gen) < mConfig.dt*n->particleComp) { 
+            if (!grainExists && (1000*(-0.0212 *n->temp + 61.3952)/mConfig.molarVolume - mConfig.hetNucUnderCooling) > 0 && prob_dist(gen) < n->particleComp*mConfig.dt && globAvailPart > 1) { 
                  addGrain(n);
+                for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
+                    node* nt = allNodes[ptr];
+                    nt->particleComp = nt->particleComp - ((nt->particleComp *(1-nt->phase))/globAvailPart)*(globAvailPart-1);
+                }
+                n->particleComp = 1;
              }
          }
         

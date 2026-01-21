@@ -55,7 +55,7 @@
   "BasePlateTempK": 500.0,
 
   "diffusionActivationEnergy": 1.5,
-  "TimeSteps": 10000000,
+  "TimeSteps": 100000000,
 
   "CoolingRatempers": 0.3,
   "MinimumTempK": 100,
@@ -65,6 +65,6 @@
   "drivingForceSlopek": -0.0212,
   "drivingForceIntercept": 61.3952,
 
-  "particleSolidIntEnergy": 0.5,
-  "particleLiqIntEnergy": 0.1
+  "particleSolidIntEnergy": 0.1,
+  "particleLiqIntEnergy": 1.0
 }
