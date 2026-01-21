@@ -66,5 +66,8 @@
   "drivingForceIntercept": 61.3952,
 
   "particleSolidIntEnergy": 0.5,
-  "particleLiqIntEnergy": 0.1
+  "particleLiqIntEnergy": 0.1,
+
+  "enableVisualization": true,
+  "enableProfiling": true
 }

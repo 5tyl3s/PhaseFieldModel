@@ -1,0 +1,49 @@
+{
+  "__comments": {
+    "note": "HPC-optimized configuration - visualization and detailed profiling disabled for speed",
+    "enableVisualization": "Disabled for HPC systems without X11 display",
+    "enableProfiling": "Disabled to reduce profiling overhead on HPC nodes",
+    "TimeSteps": "Reduced for testing - increase for production runs"
+  },
+
+  "dx_um": 1,
+  "dt_s": 0.00000001,
+  "startTempK": 2896,
+  "meltTemp": 2896,
+
+  "HeatCapacityJKgK": 251,
+  "Densitykgm3": 10280,
+
+  "cellHeightum": 50,
+  "cellWidthum": 50,
+
+  "particleVolumeFraction": 0.1,
+  "particleDiameter_um": 1.0,
+
+  "LiqSolIntEnergyJm2": 2.92,
+  "LiqSolIntWidthum": 1,
+  "GrainIntEnergyJm2": 2.92,
+  "GrainIntWidthum": 1,
+
+  "PhaseBarrierHeightCoefficient": 0.25,
+  "GrainBarrierHeightCoefficient": 0.125,
+
+  "BasePlateTempK": 500.0,
+
+  "diffusionActivationEnergy": 1.5,
+  "TimeSteps": 10000000,
+
+  "CoolingRatempers": 0.3,
+  "MinimumTempK": 100,
+  "tempGradKperm": 100000.0,
+
+  "molarMass": 95.95,
+  "drivingForceSlopek": -0.0212,
+  "drivingForceIntercept": 61.3952,
+
+  "particleSolidIntEnergy": 0.5,
+  "particleLiqIntEnergy": 0.1,
+
+  "enableVisualization": false,
+  "enableProfiling": false
+}

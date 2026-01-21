@@ -6,10 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Include directories
 include_directories(${PROJECT_SOURCE_DIR}/include)
-include_directories(C:/msys64/mingw64/include)
-
-# Manual library paths for MSYS2 64-bit
-link_directories(C:/msys64/mingw64/lib)
 
 # Source files
 set(SOURCES
@@ -19,18 +15,92 @@ set(SOURCES
     src/main.cpp
     src/model.cpp
     src/modelStartup.cpp
+    src/helperFunctions.cpp
 )
 
 add_executable(PhaseFieldModel ${SOURCES})
 
-# Link libraries directly
-target_link_libraries(PhaseFieldModel PRIVATE
-    glfw3
-    glew32
-    opengl32
-)
-
-# OpenMP
+# OpenMP (required)
 find_package(OpenMP REQUIRED)
 target_link_libraries(PhaseFieldModel PRIVATE OpenMP::OpenMP_CXX)
+
+# Optional: OpenGL/GLFW for visualization
+# Try multiple approaches to find these libraries
+
+# First, try pkg-config (works on many systems)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(GLFW glfw3 QUIET)
+    pkg_check_modules(GLEW glew QUIET)
+endif()
+
+# If pkg-config didn't find them, try CMake find_package
+if(NOT GLFW_FOUND)
+    find_package(GLFW3 QUIET)
+    if(GLFW3_FOUND)
+        set(GLFW_LIBRARIES ${GLFW3_LIBRARIES})
+        set(GLFW_INCLUDE_DIRS ${GLFW3_INCLUDE_DIR})
+    endif()
+endif()
+
+if(NOT GLEW_FOUND)
+    find_package(GLEW QUIET)
+    if(GLEW_FOUND)
+        set(GLEW_LIBRARIES ${GLEW_LIBRARIES})
+        set(GLEW_INCLUDE_DIRS ${GLEW_INCLUDE_DIRS})
+    endif()
+endif()
+
+find_package(OpenGL QUIET)
+
+# Check if we found the visualization libraries
+if(GLFW_FOUND AND GLEW_FOUND AND OPENGL_FOUND)
+    target_link_libraries(PhaseFieldModel PRIVATE ${GLFW_LIBRARIES} ${GLEW_LIBRARIES} ${OPENGL_LIBRARIES})
+    if(GLFW_INCLUDE_DIRS)
+        target_include_directories(PhaseFieldModel PRIVATE ${GLFW_INCLUDE_DIRS})
+    endif()
+    if(GLEW_INCLUDE_DIRS)
+        target_include_directories(PhaseFieldModel PRIVATE ${GLEW_INCLUDE_DIRS})
+    endif()
+    message(STATUS "Visualization libraries found via pkg-config/CMake - OpenGL support enabled")
+else()
+    # Fallback: try manual MSYS2 paths
+    message(STATUS "Trying MSYS2 fallback paths...")
+    set(MSYS2_LIB_PATHS 
+        "C:/msys64/mingw64/lib"
+        "C:/msys64/mingw32/lib"
+        "C:/mingw64/lib"
+        "C:/mingw32/lib"
+    )
+    
+    set(MSYS2_INCLUDE_PATHS
+        "C:/msys64/mingw64/include"
+        "C:/msys64/mingw32/include"
+        "C:/mingw64/include"
+        "C:/mingw32/include"
+    )
+    
+    find_library(GLFW3_LIB NAMES glfw3 glfw PATHS ${MSYS2_LIB_PATHS} NO_DEFAULT_PATH)
+    find_library(GLEW_LIB NAMES glew32 glew PATHS ${MSYS2_LIB_PATHS} NO_DEFAULT_PATH)
+    find_library(OPENGL_LIB NAMES opengl32 opengl PATHS ${MSYS2_LIB_PATHS} NO_DEFAULT_PATH)
+    
+    if(GLFW3_LIB AND GLEW_LIB AND OPENGL_LIB)
+        target_link_libraries(PhaseFieldModel PRIVATE ${GLFW3_LIB} ${GLEW_LIB} ${OPENGL_LIB})
+        
+        # Add include directories from MSYS2
+        foreach(INCLUDE_PATH ${MSYS2_INCLUDE_PATHS})
+            if(EXISTS ${INCLUDE_PATH})
+                target_include_directories(PhaseFieldModel PRIVATE ${INCLUDE_PATH})
+            endif()
+        endforeach()
+        
+        message(STATUS "Visualization libraries found via MSYS2 fallback - OpenGL support enabled")
+    else()
+        message(WARNING "Visualization libraries NOT found")
+        message(WARNING "  - GLFW3_LIB: ${GLFW3_LIB}")
+        message(WARNING "  - GLEW_LIB: ${GLEW_LIB}")
+        message(WARNING "  - OPENGL_LIB: ${OPENGL_LIB}")
+        message(WARNING "Build will succeed but set enableVisualization=false in config.json")
+    endif()
+endif()
 

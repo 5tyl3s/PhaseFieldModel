@@ -234,13 +234,10 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
         (-2 + 2*pha) * uc * driveToSol  + (2 * pha * (1 - uc)*driveToLiq )
     );
     //std::cout << "Phase: " << pha <<  " uc: " << uc <<" Local Term1: " << eLoc << std::endl;
-    double grainSum = 0.0;
-    for (int g = 0; g < 9; g++) {
-        grainSum += nd->exists*nd->grainPhases[g] * nd->grainPhases[g];
-    }
+    
     //std::cout << grainSum << std::endl;
 
-    eLoc = eLoc + mConfig.phaseCoefficient *10000*((2* pha-2) * grainSum)+(2*pha* (1 - grainSum));
+    eLoc = eLoc + mConfig.phaseCoefficient *10000*((2* pha-2) * nd->sumGrains)+(2*pha* (1 - nd->sumGrains));
     
    double sizeScale = 0.66*4*3.14149 * pow(mConfig.particleRadius,2)/((4/3)*3.14159*pow(mConfig.particleRadius,3)); // surface area / volume
      
