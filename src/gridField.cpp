@@ -157,6 +157,7 @@ void gridField::update(
     static long long totalParticleUpdateTime = 0;
     static long long totalPropagateGrainTime = 0;
     static int profileCount = 0;
+    
 
     // use compile-time TOTAL_NODES from header
     node* n;
@@ -167,14 +168,17 @@ void gridField::update(
         if (!n) continue;
         
         // update phase
-        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[ptr]*2e-16;
+        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*2e-16;
+        double grainHereCount = 0.0;
 
         // update grain phases
         for (int g = 0; g < 9; g++) {
             n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*5e-15);
-            #pragma omp atomic
-            n->sumGrains = n->sumGrains - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*5e-15);
+            grainHereCount = grainHereCount + pow(n->grainPhases[g],2);
+            
+
         }
+        n->sumGrains = grainHereCount;
     }
 
     // Profiling: Track time for first update (phase and grain updates)
