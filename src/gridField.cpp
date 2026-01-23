@@ -89,6 +89,8 @@ void gridField::init(config modelConfig) {
             grid[ik][jk].temp = 0.0;
             // Initialize temperature: startTemp + vertical temperature gradient
             grid[ik][jk].temp = modelConfig.startTemp + (ik * modelConfig.tGrad * modelConfig.dx);
+            grid[ik][jk].grainsToAdd = 0;
+
         };
     }
 }
@@ -149,7 +151,6 @@ void gridField::update(
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> prob_dist(0.0, 1.0);
-    bool flip;
     bool grainExists = 0;
 
     // Performance profiling
@@ -167,7 +168,7 @@ void gridField::update(
         if (!n) continue;
         
         // update phase
-        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*1.6e-16;
+        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*3e-16;
 
         // update grain phases
         for (int g = 0; g < 9; g++) {
@@ -257,72 +258,110 @@ void gridField::update(
     auto t3_start = std::chrono::steady_clock::now();
 
     // second pass: clamp values and propagate active grains / nucleation
+    #pragma omp parallel for
     for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
         node* n = allNodes[ptr];
         if (!n) continue;
-
         if (n->phase > 1.0) n->phase = 1.0;
         if (n->phase < 0.0) n->phase = 0.0;
-
-        for (int g = 0; g < n->grainsHere; g++) {
-            int activeGrainID = n->activeGrains[g];
-            if (activeGrainID < 0) continue;
-
-            // Clamp the local grain slot value (index = g)
-            if (n->grainPhases[g] >= 1.0) {
-                n->grainPhases[g] = 1.0;
+        for (int nb = 0; nb < 8; nb++) {
+            node* nbr = n->neighbors[nb];
+            if (!nbr || nbr->exists == 0) continue;
+            bool found;
+            // Find grain with highest phase from this neighbor
+        int bestGrain = -1;
+        double bestPhase = 0.01;
+        for (int rg = 0; rg < nbr->grainsHere; rg++) {
+            if (nbr->grainPhases[rg] > bestPhase) {
+                // Check if we already have this grain
+                bool alreadyHave = false;
+                for (int g = 0; g < n->grainsHere; g++) {
+                    if (n->activeGrains[g] == nbr->activeGrains[rg]) {
+                        alreadyHave = true;
+                        break;
+                    }
+                }
+                if (!alreadyHave) {
+                    bestGrain = nbr->activeGrains[rg];
+                    bestPhase = nbr->grainPhases[rg];
+                }
             }
-            if (n->grainPhases[g] < 0.0) {
-                n->grainPhases[g] = 0.0;
+        }
+        // Add only the best grain from this neighbor (highest phase)
+        if (bestGrain != -1 && n->grainsToAdd < 9) {
+            // Check it's not already in grainsToAdd
+            bool alreadyAdded = false;
+            for (int ag = 0; ag < n->grainsToAdd; ag++) {
+                if (n->addGrainsHere[ag] == bestGrain) {
+                    alreadyAdded = true;
+                    break;
+                }
             }
-
-            if (n->grainPhases[g] > 0.01) {
-                // try to add this grain (by global id) to neighbors if not already present
-                for (int nb = 0; nb < 8; nb++) {
-                    node* nbr = n->neighbors[nb];
-                     if (!nbr || nbr->exists == 0) continue;
-                     bool found = false;
-                     for (int rg = 0; rg < nbr->grainsHere; rg++) {
-                         if (nbr->activeGrains[rg] == activeGrainID) {
-                             found = true;
-                             break;
-                         }
-                     }
-                     if (!found) {
-                         int insertPos = nbr->grainsHere;
-                         if (insertPos < 9) {
-                             nbr->grainsHere = insertPos + 1;
-                             nbr->activeGrains[insertPos] = activeGrainID;
-                             nbr->orientations[insertPos] = n->orientations[g];
-                         }
-                     }
-                 }
-             }
-         }
-
+            if (!alreadyAdded) {
+                n->addGrainsHere[n->grainsToAdd] = bestGrain;
+                n->grainsToAdd++;
+            }
+        }
+        }
         if (n->temp < (mConfig.meltTemp)) {
             grainExists = 0;
             if (n->grainsHere > 0 ) grainExists = 1;
-            for (int nb = 0; nb < 8 && !grainExists; nb++) {
-                node* nbr = n->neighbors[nb];
-                if (!nbr) continue;
-                if (nbr->grainsHere > 0) grainExists = 1;
-            }
-             
+            if (n->grainsToAdd > 0) grainExists = 1;
             if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,3) * mConfig.dt * n->calcNucRate(mConfig) * -1))) { 
-                 addGrain(n);
-             }
+                n-> homoNucleateHere = true;
+            }
             if (!grainExists && (1000*(-0.0212 *n->temp + 61.3952)/mConfig.molarVolume + mConfig.hetNucUnderCooling) < 0 && prob_dist(gen) < mConfig.dt*n->particleComp) { 
-                 addGrain(n);
-             }
-         }
+                n-> hetNucleateHere = true;
+            }
+ 
+        }
+    
         
         // Update temperature after checking for nucleation
-        n->temp = tGrad[ptr];
-             
-         
-     }
+    n->temp = tGrad[ptr];
+    }
+    for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
+        node* n = allNodes[ptr];
+        if (!n) continue;
+        // Add new grains from neighbors
+        for (int ag = 0; ag < n->grainsToAdd; ag++) {
+            int newGrainID = n->addGrainsHere[ag];
+            n->activeGrains[n->grainsHere] = newGrainID;
+            
+            // Find the orientation from the neighbor that has this grain
+            // Search through all neighbors to find one with this grain ID
+            bool orientationFound = false;
+            for (int nb = 0; nb < 8; nb++) {
+                node* nbr = n->neighbors[nb];
+                if (!nbr || nbr->exists == 0) continue;
+                for (int rg = 0; rg < nbr->grainsHere; rg++) {
+                    if (nbr->activeGrains[rg] == newGrainID) {
+                        // Copy orientation from neighbor
+                        n->orientations[n->grainsHere] = nbr->orientations[rg];
+                        orientationFound = true;
+                        break;
+                    }
+                }
+                if (orientationFound) break;
+            }
+            
+            n->grainsHere++;
+        }
+        n->grainsToAdd = 0;
+        n->addGrainsHere = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+        if (n->hetNucleateHere) {
+            // Handle heterogeneous nucleation
+            n->hetNucleateHere = false;
+            globalField.addGrain(n);
+        }
+        if (n->homoNucleateHere) {  
+            // Handle homogeneous nucleation
+            n->homoNucleateHere = false;
+            globalField.addGrain(n);
+        }
 
+        // Handle homogeneous nucleation
+    }
     auto t3_end = std::chrono::steady_clock::now();
     if (enableProfiling) {
         totalPropagateGrainTime += std::chrono::duration_cast<std::chrono::microseconds>(t3_end - t3_start).count();
