@@ -1,0 +1,3 @@
+C:/Work/PhaseField/PhaseFieldModel/CMakeFiles/PhaseFieldModel.dir
+C:/Work/PhaseField/PhaseFieldModel/CMakeFiles/edit_cache.dir
+C:/Work/PhaseField/PhaseFieldModel/CMakeFiles/rebuild_cache.dir

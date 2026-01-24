@@ -55,7 +55,7 @@
   "BasePlateTempK": 500.0,
 
   "diffusionActivationEnergy": 1.5,
-  "TimeSteps": 10000000,
+  "TimeSteps": 100000000,
 
   "CoolingRatempers": 0.3,
   "MinimumTempK": 100,

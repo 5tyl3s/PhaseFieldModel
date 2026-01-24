@@ -158,6 +158,7 @@ void gridField::update(
     static long long totalParticleUpdateTime = 0;
     static long long totalPropagateGrainTime = 0;
     static int profileCount = 0;
+    
 
     // use compile-time TOTAL_NODES from header
     node* n;
@@ -168,14 +169,17 @@ void gridField::update(
         if (!n) continue;
         
         // update phase
-        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*3e-16;
+        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*2e-16;
+        double grainHereCount = 0.0;
 
         // update grain phases
         for (int g = 0; g < 9; g++) {
             n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*5e-15);
-            #pragma omp atomic
-            n->sumGrains = n->sumGrains - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*5e-15);
+            grainHereCount = grainHereCount + pow(n->grainPhases[g],2);
+            
+
         }
+        n->sumGrains = grainHereCount;
     }
 
     // Profiling: Track time for first update (phase and grain updates)
@@ -238,11 +242,13 @@ void gridField::update(
     auto t2_start = std::chrono::steady_clock::now();
     
     // Apply changes TOGETHER to preserve global sum
+    double globAvailPart = 0.0;
     #pragma omp parallel for
     for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
         node* n = allNodes[ptr];
         if (!n) continue;
         n->particleComp = n->particleComp + particleCompChange[ptr];
+        globAvailPart += n->particleComp*(1-n->phase);
         
         // Clamp to [0, 1] to prevent unphysical values
         if (n->particleComp < 0.0) n->particleComp = 0.0;
@@ -308,14 +314,17 @@ void gridField::update(
             if (n->grainsHere > 0 ) grainExists = 1;
             if (n->grainsToAdd > 0) grainExists = 1;
             if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,3) * mConfig.dt * n->calcNucRate(mConfig) * -1))) { 
-                n-> homoNucleateHere = true;
-            }
-            if (!grainExists && (1000*(-0.0212 *n->temp + 61.3952)/mConfig.molarVolume + mConfig.hetNucUnderCooling) < 0 && prob_dist(gen) < mConfig.dt*n->particleComp) { 
-                n-> hetNucleateHere = true;
-            }
- 
-        }
-    
+                 addGrain(n);
+             }
+            if (!grainExists && (1000*(-0.0212 *n->temp + 61.3952)/mConfig.molarVolume - mConfig.hetNucUnderCooling) > 0 && prob_dist(gen) < n->particleComp*mConfig.dt && globAvailPart > 1) { 
+                 addGrain(n);
+                for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
+                    node* nt = allNodes[ptr];
+                    nt->particleComp = nt->particleComp - ((nt->particleComp *(1-nt->phase))/globAvailPart)*(globAvailPart-1);
+                }
+                n->particleComp = 1;
+             }
+         }
         
         // Update temperature after checking for nucleation
     n->temp = tGrad[ptr];

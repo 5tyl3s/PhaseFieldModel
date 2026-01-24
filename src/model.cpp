@@ -258,7 +258,7 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     if (nCount > 0) {
         lapPh = sumPh - nCount * pha;  // (sum of neighbors - 4*center)
     }
-    lapPh *= (1/(mConfig.dx*mConfig.dx));
+    lapPh *= (10/(mConfig.dx*mConfig.dx));
     double eGrad = lapPh * mConfig.phaseGradCo;
     //std::cout << "Phase Gradient Coefficient: " << mConfig.phaseGradCo << std::endl;
     double diffFree = eLoc + eGrad;
