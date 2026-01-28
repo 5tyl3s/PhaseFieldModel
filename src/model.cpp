@@ -227,20 +227,19 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     double pha = nd->phase;
     double part = nd->particleComp;
     double uc = underCool(nd->temp, mConfig.meltTemp);
-    double driveToLiq = 1000*(0.0349*nd->temp - 101.0704)/mConfig.molarVolume; // J/m^3
-    double driveToSol = 1000*(-0.0212 *nd->temp + 61.3952)/mConfig.molarVolume; // J/m^3
+    double driveToLiq = (0.0349*nd->temp - 101.0704)/mConfig.molarVolume; // J/m^3
+    double driveToSol = (-0.0212 *nd->temp + 61.3952)/mConfig.molarVolume; // J/m^3
     //std::cout << "PhaseCoefficient is: " << mConfig.phaseCoefficient << std::endl;
-    double eLoc = (
-        (-2 + 2*pha) * uc * driveToSol  + (2 * pha * (1 - uc)*driveToLiq )
-    );
+    double eLoc = (-2 + 2*pha) * uc * driveToSol  + 0.1*(2 * pha * (1 - uc)*driveToLiq );
+    
     //std::cout << "Phase: " << pha <<  " uc: " << uc <<" Local Term1: " << eLoc << std::endl;
     
     //std::cout << grainSum << std::endl;
 
-    eLoc = eLoc + mConfig.phaseCoefficient *100000*((2* pha-2) * nd->sumGrains)+(2*pha* (1 - nd->sumGrains));
+    eLoc = eLoc + mConfig.phaseCoefficient*(((2* pha-2) * nd->sumGrains)+(pha*2*(1 - nd->sumGrains)));
     
    double sizeScale = 0.66*4*3.14149 * pow(mConfig.particleRadius,2)/((4/3)*3.14159*pow(mConfig.particleRadius,3)); // surface area / volume
-     
+    
 
     eLoc = eLoc +  ((pha) * pow(part,2)*mConfig.particleSolidIntEnergy*sizeScale) + ((2*pha-2) * (pow(part,2))*mConfig.particleLiquidIntEnergy*sizeScale);
     //std::cout << "After Grain and Particle Term: " << eLoc << std::endl;
@@ -258,12 +257,12 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     if (nCount > 0) {
         lapPh = sumPh - nCount * pha;  // (sum of neighbors - 4*center)
     }
-    lapPh *= (10/(mConfig.dx*mConfig.dx));
+    lapPh = lapPh* (1/(mConfig.dx*mConfig.dx));
     double eGrad = lapPh * mConfig.phaseGradCo;
     //std::cout << "Phase Gradient Coefficient: " << mConfig.phaseGradCo << std::endl;
     double diffFree = eLoc + eGrad;
     //std::cout << "Phase Diff Energy: " << diffFree << " GradientTerm: " << eGrad << " Gradient:" << eGrad << std::endl ;
-    diffFree = safeClamp(diffFree, -1e8, 1e8);
+    diffFree = safeClamp(diffFree, -1e22, 1e22);
     return diffFree;
  
  }
@@ -274,6 +273,7 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
 std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
     std::array<double,9> diffFree;
     std::array<double,8> grainGradVals {0,0,0,0,0,0,0,0};
+    double sumOtherGrainsSquared = nd->sumGrains;
 
     for (int g = 0; g < 9; g++) {
         double gra = nd->grainPhases[g];
@@ -314,7 +314,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
         } 
         for(int nb = 4; nb < 8; nb++) {
             node* nbr = nd->neighbors[nb];
-            if(nbr && nbr->exists != 0) nCount+= 0.5;
+            if(nbr && nbr->exists != 0) nCount+= 0.7071;
         } 
         double lapGr = 0.0;
         if(nCount > 0) {
@@ -322,7 +322,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
         }
         // Gradient term drives growth: negative Laplacian (center surrounded by grain) lowers energy
         // Multiply by -1 so that lapGr > 0 (neighbors > center) makes grainGrad negative (lowers energy)
-        double grainGrad = -lapGr * mConfig.grainGradCo / (mConfig.dx * mConfig.dx);
+        double grainGrad = -2*lapGr *0.5*mConfig.grainGradCo / (mConfig.dx * mConfig.dx);
 
        double gx = 0.0, gy = 0.0, gz = 0.0;
         double inv2dx = 0.5 / mConfig.dx;   // (right - left)/(2*dx)
@@ -346,12 +346,12 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
             std::cout << "Warning: Calculated GB energy below minimum. Clamping to minimum value." << std::endl;
             gbEnergy = 2.92;
         }
-        grainGrad = grainGrad * gbEnergy*3; // scale gradient by local GB energy
+        grainGrad = 0.5*0.5*grainGrad * gbEnergy; // scale gradient by local GB energy
         //std::cout << "Grain Gradient: " << grainGrad << std::endl;
         // Compute interaction/comp terms
-        double comp = sumOtherGrainsSquared(g, *nd, 9);
+        double comp = sumOtherGrainsSquared - (gra*gra);
         double notUC = 1.0 - underCool(nd->temp, mConfig.meltTemp);
-        double grainEnergy = mConfig.grainPreCo*((pow(gra,3)-gra)*underCool(nd->temp, mConfig.meltTemp) + (gra*pow(comp,2)*mConfig.grainIntWidth) );
+        double grainEnergy = mConfig.grainPreCo*((pow(gra,3)-gra)*underCool(nd->temp, mConfig.meltTemp) + (1e6*gra*comp*mConfig.grainIntWidth));
         grainGrad = safeClamp(grainGrad, -1e12, 1e12);
         grainEnergy = safeClamp(grainEnergy, -1e12, 1e12);
         diffFree[g] = grainGrad + grainEnergy;

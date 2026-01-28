@@ -3,8 +3,8 @@
 #include "importConfig.hpp"
 
 // Define grid dimensions in one place. Change these values to the desired grid size.
-constexpr int GRID_ROWS = 100;
-constexpr int GRID_COLS = 200;
+constexpr int GRID_ROWS = 75;
+constexpr int GRID_COLS = 75;
 constexpr int TOTAL_NODES = GRID_ROWS * GRID_COLS;
 
 struct eulerAngles {
@@ -22,9 +22,12 @@ struct node {
     int sumGrains;
     int grainsHere;
     int heightPos;
+    int xPos;
+    int yPos;
     bool hetNucleateHere;
     bool homoNucleateHere;
     std::array<int,9> addGrainsHere;
+    std::array<eulerAngles, 9> addGrainsOrientations;
     int grainsToAdd;
 
     std::array<eulerAngles, 9> orientations;
