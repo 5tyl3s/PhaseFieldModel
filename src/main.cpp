@@ -227,6 +227,46 @@ int main() {
     // Save all grid data to files
     saveGridData(globalField);
 
+    // Convert BMP frames to MP4 video at 30 FPS and delete BMP files
+    std::cout << "\nConverting BMP frames to MP4 video...\n";
+    std::string framesPattern = (framesDir / "frame_%06d.bmp").string();
+    // Convert backslashes to forward slashes for ffmpeg compatibility
+    std::replace(framesPattern.begin(), framesPattern.end(), '\\', '/');
+    
+    std::string outputVideo = (framesDir.parent_path() / "simulation_video.mp4").string();
+    std::replace(outputVideo.begin(), outputVideo.end(), '\\', '/');
+    
+    // Build FFmpeg command using ffmpeg from PATH
+    std::string ffmpegCmd = "ffmpeg -framerate 30 -i \"" + framesPattern + "\" -c:v mpeg4 -q:v 5 -y \"" + outputVideo + "\"";
+    
+    std::cout << "Running FFmpeg...\n";
+    int ffmpegResult = system(ffmpegCmd.c_str());
+    std::cout << "FFmpeg process exited with code: " << ffmpegResult << "\n";
+    
+    if (ffmpegResult == 0) {
+        std::cout << "Video created successfully: " << outputVideo << "\n";
+        
+        // Delete all BMP files
+        std::cout << "Deleting BMP frame files...\n";
+        int deletedCount = 0;
+        for (const auto& entry : std::filesystem::directory_iterator(framesDir)) {
+            if (entry.path().extension() == ".bmp") {
+                std::error_code ec;
+                std::filesystem::remove(entry.path(), ec);
+                if (!ec) {
+                    deletedCount++;
+                } else {
+                    std::cerr << "Failed to delete: " << entry.path() << "\n";
+                }
+            }
+        }
+        std::cout << "Deleted " << deletedCount << " BMP files.\n";
+    } else {
+        std::cerr << "FFmpeg command failed with exit code: " << ffmpegResult << "\n";
+        std::cerr << "BMP frames are still available in: " << framesDir << "\n";
+        std::cerr << "Make sure all " << frameCounter << " frame BMP files are present.\n";
+    }
+
     std::cout << "Elapsed(ms)=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start1).count() << std::endl;
     return 0;
 }

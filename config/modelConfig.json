@@ -65,8 +65,8 @@
   "drivingForceSlopek": -0.0212,
   "drivingForceIntercept": 61.3952,
 
-  "particleSolidIntEnergy": 0.3,
-  "particleLiqIntEnergy": 0.195,
+  "particleSolidIntEnergy": 2.96,
+  "particleLiqIntEnergy": 2.955,
 
   "enableVisualization": true,
   "enableProfiling": true

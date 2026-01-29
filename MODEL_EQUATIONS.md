@@ -1,6 +1,6 @@
 # Inoculation Phase Field Model - Complete Equation Reference
 
-This document contains all mathematical equations used in the phase field simulation model.
+This document contains all mathematical equations used in the current phase field simulation model, including the updated nucleation mechanics with particle redistribution.
 
 ---
 
@@ -33,11 +33,13 @@ where the driving force is:
 
 $$\frac{\delta F}{\delta \phi} = \frac{dE_{\text{local}}}{d\phi} + \nabla^2 E_{\text{grad}}$$
 
-Discrete form:
+Discrete form (with explicit tuning coefficient $3 \times 10^{-16}$):
 $$\phi^{n+1} = \phi^n - \frac{\Delta t}{(\Delta x)^2} \times \text{diffEnergy}_\phi \times 3 \times 10^{-16}$$
 
+**Note**: The coefficient $3 \times 10^{-16}$ is a tuning parameter to control phase field evolution speed.
+
 ### Phase Local Energy Density
-The local phase energy includes contributions from undercooling, driving forces, grain interaction, and particle interaction:
+The local phase energy includes contributions from undercooling, grain interaction, and particle interaction:
 
 $$E_{\text{local}} = (-2 + 2\phi) \cdot u_c \cdot \Delta G_{\text{sol}} + 2\phi(1 - u_c) \Delta G_{\text{liq}}$$
 
@@ -49,7 +51,7 @@ where:
 - $u_c$ = undercooling fraction (dimensionless, 0 to 1)
 - $\Delta G_{\text{sol}}$ = driving force to solidification (J/m³)
 - $\Delta G_{\text{liq}}$ = driving force to liquification (J/m³)
-- $A_\phi$ = phase coefficient
+- $A_\phi$ = phase coefficient (computed from interfacial energy and barrier height)
 - $\psi_g$ = grain phase field
 - $c_p$ = particle composition
 - $\gamma_s, \gamma_l$ = particle-solid and particle-liquid interfacial energies
@@ -62,6 +64,8 @@ $$E_{\text{grad}} = K_\phi \nabla^2 \phi \times 10$$
 
 $$\nabla^2 \phi = \sum_{\text{neighbors}} \phi_{\text{nbr}} - 4 \cdot \phi_{\text{center}}$$
 
+**Note**: The coefficient $10$ is a tuning multiplier for gradient energy strength.
+
 ---
 
 ## 3. Grain Field Evolution
@@ -71,8 +75,10 @@ Each grain field $\psi_g$ evolves independently:
 
 $$\frac{\partial \psi_g}{\partial t} = -M_g \frac{\delta F}{\delta \psi_g}$$
 
-Discrete form:
+Discrete form (with explicit tuning coefficient $5 \times 10^{-15}$):
 $$\psi_g^{n+1} = \psi_g^n - \frac{\Delta t}{(\Delta x)^2} \times \text{diffEnergy}_g \times 5 \times 10^{-15}$$
+
+**Note**: The coefficient $5 \times 10^{-15}$ is a tuning parameter to control grain field evolution speed.
 
 ### Grain Local Energy Density
 The grain energy includes growth driving force and competition with other grains:
@@ -80,7 +86,7 @@ The grain energy includes growth driving force and competition with other grains
 $$E_{\text{grain}} = C_{\text{pre}} \left[\left(\psi_g^3 - \psi_g\right) \cdot u_c + \psi_g \left(\sum_{j \neq g} \psi_j\right)^2 \cdot \kappa_g \right]$$
 
 where:
-- $C_{\text{pre}}$ = grain energy pre-coefficient
+- $C_{\text{pre}}$ = grain energy pre-coefficient (computed from grain interfacial energy)
 - $\kappa_g$ = grain interaction width
 - $u_c$ = undercooling fraction
 
@@ -107,12 +113,15 @@ where:
 ### Driving Force to Solidification
 Linear fit to thermodynamic data:
 
-$$\Delta G_{\text{sol}} = 1000 \times \frac{-0.0212 \cdot T + 61.3952}{\bar{V}}$$
+$$\Delta G_{\text{sol}} = 1000 \times \frac{m_{\text{slope}} \cdot T + b_{\text{intercept}}}{\bar{V}}$$
 
-where $\bar{V}$ = molar volume (m³/mol)
+where:
+- $m_{\text{slope}} = -0.0212$ K⁻¹ (tuning parameter)
+- $b_{\text{intercept}} = 61.3952$ (tuning parameter)
+- $\bar{V}$ = molar volume (m³/mol)
 
 ### Driving Force to Liquification
-$$\Delta G_{\text{liq}} = 1000 \times \frac{0.0349 \cdot T - 101.0704}{\bar{V}}$$
+$$\Delta G_{\text{liq}} = 1000 \times \frac{-m_{\text{slope}} \cdot T - b_{\text{intercept}}}{\bar{V}}$$
 
 ---
 
@@ -141,13 +150,15 @@ The mobility is phase-dependent (higher in liquid):
 $$M(\phi) = M_{\text{liquid}} (1 - \phi) + M_{\text{solid}} \phi$$
 
 where:
-- $M_{\text{liquid}} = 10^{-12}$ m²/J·s (typical)
-- $M_{\text{solid}} = 10^{-24}$ m²/J·s (typical)
+- $M_{\text{liquid}} = 1.0 \times 10^{-15}$ m²/J·s (tuning parameter)
+- $M_{\text{solid}} = 1.0 \times 10^{-24}$ m²/J·s (tuning parameter)
 
 ### Particle Flux and Laplacian
-$$\text{flux} = M(\phi) \cdot \nabla^2 \mu / (\Delta x)^2$$
+$$\text{flux} = -M(\phi) \cdot \nabla^2 \mu / (\Delta x)^2$$
 
 $$\nabla^2 \mu = \sum_{\text{4-neighbors}} \mu_{\text{nbr}} - 4 \mu_{\text{center}}$$
+
+**Boundary Condition**: No-flux boundary at top and bottom (neighbors with `exists == 0` are skipped in Laplacian calculation).
 
 ---
 
@@ -170,13 +181,7 @@ The gradient normal is rotated by the grain orientation (Bunge convention):
 
 $$\mathbf{R} = R_z(\phi_2) \cdot R_x(\Phi) \cdot R_z(\phi_1)$$
 
-where $(\phi_1, \Phi, \phi_2)$ are the Euler angles. Element-by-element:
-
-$$R_{00} = \cos\phi_1 \cos\phi_2 - \sin\phi_1 \sin\phi_2 \cos\Phi$$
-$$R_{01} = -\cos\phi_1 \sin\phi_2 - \sin\phi_1 \cos\phi_2 \cos\Phi$$
-$$R_{02} = \sin\phi_1 \sin\Phi$$
-
-(and so on for other elements)
+where $(\phi_1, \Phi, \phi_2)$ are the Euler angles.
 
 ### Rotated Normal in Spherical Coordinates
 Convert rotated normal to $(r, \theta, \phi)$:
@@ -186,7 +191,10 @@ $$\theta = \arccos\left(\frac{z}{r}\right), \quad \phi = \arctan2(y, x)$$
 ### Grain Boundary Energy via Spherical Harmonics
 $$\gamma_{GB}(\theta, \phi) = \sum_{l=0}^{L_{\max}} \sum_{m=-l}^{l} c_{lm} Y_{lm}^{\text{real}}(\theta, \phi)$$
 
-where $Y_{lm}^{\text{real}}$ are real spherical harmonics and $c_{lm}$ are coefficients read from a data file.
+where:
+- $Y_{lm}^{\text{real}}$ = real spherical harmonics
+- $c_{lm}$ = coefficients read from data file
+- $L_{\max} = 8$ (maximum harmonic degree)
 
 ### Real Spherical Harmonics
 $$Y_{lm}^{\text{real}}(\theta, \phi) = \begin{cases}
@@ -203,44 +211,38 @@ where:
 
 ## 7. Nucleation
 
-### Homogeneous Nucleation Probability
-Uses classical nucleation theory:
-
+### Homogeneous Nucleation
+**Probability**:
 $$P_{\text{hom}} = 1 - \exp\left(-(\Delta x)^3 \cdot I_{\text{hom}} \cdot \Delta t\right)$$
 
-where:
-$$I_{\text{hom}} = \frac{k_B T}{h} N_{\text{atoms}} \exp\left(-\frac{Q_d}{k_B T}\right) \exp\left(-\frac{\Delta G^*}{k_B T}\right)$$
+where $I_{\text{hom}}$ is computed via classical nucleation theory.
 
-### Critical Nucleus Free Energy (3D Spherical)
-$$\Delta G^* = \frac{16\pi \gamma^3}{3 (\Delta G_{\text{driving}})^2}$$
-
-where:
-- $\gamma = 0.05$ J/m² = surface/interfacial energy
-- $\Delta G_{\text{driving}}$ = volumetric driving force
-
-### Nucleation Rate Components
-$$N_{\text{atoms}} = \rho_A \times V_{\text{cell}}$$
-
-where $\rho_A$ = atomic number density = $N_A / \bar{V}$
-
-$$\text{DiffusionTerm} = \exp\left(-\frac{Q_d}{R T}\right)$$
-
-where:
-- $Q_d$ = diffusion activation energy
-- $R = 8.314$ J/(mol·K) = gas constant
-
-Constants:
-- $k_B = 1.380649 \times 10^{-23}$ J/K = Boltzmann constant
-- $h = 6.62607015 \times 10^{-34}$ J·s = Planck constant
-- $N_A = 6.02214076 \times 10^{23}$ mol⁻¹ = Avogadro number
+**Particle Redistribution** (NEW): When homogeneous nucleation occurs at node $n$:
+1. Set nucleation node: $c_p(n) \gets 0$
+2. Calculate total liquid fraction across grid: $L_{\text{total}} = \sum_{\text{all nodes}} (1 - \phi)$
+3. Distribute particles proportionally to liquid fraction:
+$$c_p(i) \gets c_p(i) + \frac{(1 - \phi(i))}{L_{\text{total}}}$$
+4. Clamp all values to [0, 1]
 
 ### Heterogeneous Nucleation
-Occurs when undercooling exceeds a threshold:
+**Condition**: Occurs when undercooling exceeds threshold AND particles available:
 
-$$u_c < 0 \quad \text{and} \quad P_{\text{het}} = \Delta t \cdot c_p$$
+$$\Delta G_{\text{het}} = 1000 \times \frac{m_{\text{slope}} \cdot T + b_{\text{intercept}}}{\bar{V}} > \Delta T_{\text{het,uc}}$$
 
-where the threshold is computed from:
-$$u_c = \frac{1000}{\bar{V}} \left(-0.0212 T + 61.3952\right) + \Delta T_{\text{het,uc}}$$
+AND
+
+$$P_{\text{het}} = c_p \cdot \Delta t \quad (\text{particle consumption rate})$$
+
+**Particle Redistribution** (NEW): When heterogeneous nucleation occurs at node $n$:
+1. Set nucleation node: $c_p(n) \gets 1$ (maximum particle absorption)
+2. Initialize total loss: $L = 0$
+3. Expand radially through neighboring nodes until $L \geq 1$:
+   - For each neighbor at distance $d$:
+   $$\text{Remove} = (1 - \phi_{\text{neighbor}}) \times c_p(\text{neighbor})$$
+   $$L \gets L + \text{Remove}$$
+   $$c_p(\text{neighbor}) \gets c_p(\text{neighbor}) - \text{Remove}$$
+4. Stop when $L \geq 1$ or all nodes processed
+5. Clamp all values to [0, 1]
 
 ---
 
@@ -251,63 +253,151 @@ When a grain reaches sufficient phase (> 0.01) in a neighbor, it's marked for ad
 
 $$\psi_g^{\text{neighbor}} > 0.01 \implies \text{add grain to propagation list}$$
 
-The grain with the **highest phase** from each neighbor is selected to avoid duplicate activations.
+The grain with the **highest phase** from each neighbor is selected.
 
 ### Orientation Storage During Propagation
-When grain $g$ is added to the pending list, its orientation is also stored:
+When grain $g$ is added to the pending list, its orientation is stored:
 
 $$\mathbf{O}_g^{\text{stored}} = \mathbf{O}_g^{\text{neighbor}}$$
 
 ### Grain Activation
-At the end of the timestep, pending grains are activated:
-
-$$\psi_g^{\text{new}} \gets 0 \quad \text{(initialized but will evolve)}$$
-$$\mathbf{O}_g^{\text{new}} \gets \mathbf{O}_g^{\text{stored}}$$
+At the end of timestep, pending grains are activated and grain boundary energy is computed based on stored orientation.
 
 ---
 
-## 9. Numerical Parameters
+## 9. Numerical Parameters & Coefficients
 
-### Discretization
-- Grid spacing: $\Delta x = 1 \text{ μm}$ (typical)
-- Timestep: $\Delta t = 10^{-8}$ to $10^{-12}$ s (typical)
+### Discretization Parameters
 
-### Coefficients (Typical Values)
-- Phase gradient coefficient: $K_\phi \approx 1$ (tunable)
-- Grain gradient coefficient: $K_g \approx 1$ (tunable)
-- Phase coefficient: $A_\phi \approx 0.25$
-- Grain coefficient: $A_g \approx 0.125$
-- Grain energy pre-coefficient: $C_{\text{pre}} \approx \text{tunable}$
+| Parameter | Symbol | Value | Units |
+|-----------|--------|-------|-------|
+| Grid spacing | $\Delta x$ | 1 | μm |
+| Timestep | $\Delta t$ | 1×10⁻⁸ | s |
 
-### Clamping & Safety
-All computed diffusion energies are clamped to $[-10^{12}, 10^{12}]$ J/m³ to prevent numerical overflow.
+### Material & Thermodynamic Coefficients
+
+| Parameter | Symbol | Value | Units | Notes |
+|-----------|--------|-------|-------|-------|
+| Melt temperature | $T_m$ | 2896 | K | |
+| Starting temperature | $T_{\text{start}}$ | 2891 | K | |
+| Minimum temperature | $T_{\text{min}}$ | 100 | K | |
+| Cooling rate | $C_{\text{rate}}$ | 0.3 | K/s | |
+| Temperature gradient | $G_t$ | 100000 | K/m | |
+| Specific heat capacity | $c_p$ | 251 | J/(kg·K) | |
+| Density | $\rho$ | 10280 | kg/m³ | |
+| Molar mass | $M$ | 95.95 | g/mol | |
+| Molar volume | $\bar{V}$ | $M / (1000 \rho)$ | m³/mol | Computed |
+
+### Interfacial Energy Coefficients
+
+| Parameter | Symbol | Value | Units | Notes |
+|-----------|--------|-------|-------|-------|
+| Liquid-solid interfacial energy | $\gamma_{\text{LS}}$ | 2.92 | J/m² | |
+| Liquid-solid interfacial width | $w_{\text{LS}}$ | 1 | μm | Converted to m in code |
+| Grain boundary interfacial energy | $\gamma_{GB}$ | 2.92 | J/m² | |
+| Grain boundary interfacial width | $w_{GB}$ | 1 | μm | Converted to m in code |
+| Particle-solid interfacial energy | $\gamma_{p,s}$ | 2.5 | J/m² | Tuning parameter |
+| Particle-liquid interfacial energy | $\gamma_{p,l}$ | 1.95 | J/m² | Tuning parameter |
+
+### Barrier Height Coefficients (Tuning Parameters)
+
+| Parameter | Symbol | Value | Notes |
+|-----------|--------|-------|-------|
+| Phase field barrier height | $h_\phi$ | 0.25 | Controls phase transition steepness |
+| Grain field barrier height | $h_g$ | 0.125 | Controls grain transition steepness |
+
+### Computed Phase Field Coefficients
+
+| Parameter | Symbol | Computed Formula | Value | Units |
+|-----------|--------|------------------|-------|-------|
+| Phase coefficient | $A_\phi$ | $0.75 \times \gamma_{\text{LS}} / (w_{\text{LS}} \times h_\phi)$ | ≈ 9.76 | J/m² |
+| Phase pre-coefficient | $C_{\phi,\text{pre}}$ | $0.75 \times \gamma_{\text{LS}} / (h_\phi \times w_{\text{LS}})$ | ≈ 9.76 | J/m² |
+| Phase gradient coefficient | $K_\phi$ | $0.75 \times \gamma_{\text{LS}} \times w_{\text{LS}}$ | ≈ 2.19×10⁻⁶ | J/m |
+
+### Computed Grain Field Coefficients
+
+| Parameter | Symbol | Computed Formula | Value | Units |
+|-----------|--------|------------------|-------|-------|
+| Grain pre-coefficient | $C_{g,\text{pre}}$ | $0.75 \times \gamma_{GB} / (h_g \times w_{GB})$ | ≈ 19.5 | J/m² |
+| Grain gradient coefficient | $K_g$ | $0.5 \times w_{GB}$ | ≈ 5×10⁻⁷ | m |
+
+### Particle Evolution Coefficients (Tuning Parameters)
+
+| Parameter | Symbol | Value | Units | Notes |
+|-----------|--------|-------|-------|-------|
+| Particle mobility (liquid) | $M_{\text{liq}}$ | 1×10⁻¹⁵ | m²/(J·s) | Tuning parameter |
+| Particle mobility (solid) | $M_{\text{solid}}$ | 1×10⁻²⁴ | m²/(J·s) | Tuning parameter |
+| Initial particle volume fraction | $c_p^0$ | 0.01 | - | Initial condition |
+| Particle diameter | $d_p$ | 1.0 | μm | |
+
+### Phase & Grain Field Evolution Tuning Coefficients (Critical!)
+
+| Parameter | Value | Units | Notes |
+|-----------|-------|-------|-------|
+| Phase field evolution multiplier | 3×10⁻¹⁶ | - | Controls phase field speed; **TUNING PARAMETER** |
+| Grain field evolution multiplier | 5×10⁻¹⁵ | - | Controls grain field speed; **TUNING PARAMETER** |
+| Phase gradient energy multiplier | 10 | - | Gradient term strength; **TUNING PARAMETER** |
+
+### Driving Force Coefficients (Linear Regression Fit)
+
+| Parameter | Symbol | Value | Units | Notes |
+|-----------|--------|-------|-------|-------|
+| Driving force slope | $m$ | -0.0212 | K⁻¹ | **TUNING PARAMETER** |
+| Driving force intercept | $b$ | 61.3952 | - | **TUNING PARAMETER** |
+| Diffusion activation energy | $Q_d$ | 1.5 | (arbitrary model units) | **TUNING PARAMETER** |
+
+### Nucleation Coefficients
+
+| Parameter | Symbol | Value | Notes |
+|-----------|--------|-------|-------|
+| Homogeneous nucleation base coefficient | $C_{\text{hom}}$ | 1×10²⁰ | (model units) |
+| Heterogeneous nucleation undercooling threshold | $\Delta T_{\text{het,uc}}$ | 0 | (computed from driving force) |
+
+### Spherical Harmonics
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| Maximum harmonic degree | $L_{\max}$ | 8 |
+| Number of coefficients | $(L_{\max}+1)^2$ | 81 |
 
 ---
 
-## 10. Euler Angle Convention
+## 10. Summary of Tuning Parameters
 
-The model uses **Bunge Euler angles** with the convention:
+The following parameters are **adjustable for model calibration**:
 
-- $\phi_1$ = first rotation about Z-axis (0 to 2π)
-- $\Phi$ = rotation about new X-axis (0 to π)
-- $\phi_2$ = second rotation about new Z-axis (0 to 2π)
+1. **Evolution Speed** (critical for stability):
+   - Phase evolution multiplier: $3 \times 10^{-16}$
+   - Grain evolution multiplier: $5 \times 10^{-15}$
+   
+2. **Interfacial & Mobility Properties**:
+   - Particle mobility (liquid): $1 \times 10^{-15}$ m²/(J·s)
+   - Particle mobility (solid): $1 \times 10^{-24}$ m²/(J·s)
+   - Barrier heights: $h_\phi = 0.25$, $h_g = 0.125$
 
-Rotation matrix composition:
-$$\mathbf{R} = R_z(\phi_2) \circ R_x(\Phi) \circ R_z(\phi_1)$$
+3. **Thermodynamic Driving Force**:
+   - Slope: $m = -0.0212$ K⁻¹
+   - Intercept: $b = 61.3952$
+   - Diffusion activation energy: $Q_d = 1.5$
+
+4. **Particle Interaction**:
+   - Particle-solid interfacial energy: $2.5$ J/m²
+   - Particle-liquid interfacial energy: $1.95$ J/m²
 
 ---
 
-## 11. Summary of Field Variables
+## 11. Field Variables Summary
 
-| Variable | Symbol | Units | Range |
-|----------|--------|-------|-------|
-| Phase field | $\phi$ | - | [0, 1] |
-| Grain phase | $\psi_g$ | - | [0, 1] |
-| Temperature | $T$ | K | [min, max] |
-| Particle composition | $c_p$ | - | [0, 1] |
-| Chemical potential | $\mu$ | J/m³ | ℝ |
-| Undercooling | $u_c$ | - | [0, 1] |
-| Euler angles | $(\phi_1, \Phi, \phi_2)$ | rad | [0, 2π] or [0, π] |
+| Variable | Symbol | Units | Range | Notes |
+|----------|--------|-------|-------|-------|
+| Phase field | $\phi$ | - | [0, 1] | 0 = liquid, 1 = solid |
+| Grain phase | $\psi_g$ | - | [0, 1] | Per grain |
+| Temperature | $T$ | K | [min, max] | Spatially/temporally varying |
+| Particle composition | $c_p$ | - | [0, 1] | Volume fraction |
+| Chemical potential | $\mu$ | J/m³ | ℝ | Variational derivative |
+| Undercooling | $u_c$ | - | [0, 1] | 0 = fully liquid, 1 = fully solid |
+| Liquid fraction | $(1-\phi)$ | - | [0, 1] | Used in nucleation redistribution |
+| Euler angles | $(\phi_1, \Phi, \phi_2)$ | rad | [0, 2π]/[0, π] | Bunge convention |
 
 ---
 
@@ -317,3 +407,4 @@ $$\mathbf{R} = R_z(\phi_2) \circ R_x(\Phi) \circ R_z(\phi_1)$$
 - **Grain boundary energy**: Read & Shockley, Phys. Rev. 78, 275 (1950)
 - **Classical nucleation theory**: Kelton, Solid State Physics 45, 75 (1991)
 - **Spherical harmonics**: Varshalovich, Moskalev & Khersonskii, Quantum Theory of Angular Momentum (1988)
+

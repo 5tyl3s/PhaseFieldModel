@@ -680,7 +680,7 @@ void GLVisualizer::updateFromGrid(const gridField& field) {
     glBindTexture(GL_TEXTURE_2D, 0);
 
     updateTextureTemp(textureTemp, temp, maxTemp);
-    updateTextureBlueYellowLog(textureParticle, particle);
+    updateTextureBlueYellow(textureParticle, particle);
 }
 
 void GLVisualizer::render() {

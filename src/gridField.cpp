@@ -68,9 +68,11 @@ void gridField::init(config modelConfig) {
     top.grainPhases = {};
     top.phase = 0.00;
     top.exists = 0;
+    top.particleComp = 0.0;  // No-flux boundary: initialize to safe value
     bottom.grainPhases = {};
     bottom.phase = 1.00;
     bottom.exists = 0;
+    bottom.particleComp = 0.0;  // No-flux boundary: initialize to safe value
     // mark slots as empty with -1 (valid grain IDs start at 0)
     top.activeGrains = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
     bottom.activeGrains = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
@@ -93,6 +95,8 @@ void gridField::init(config modelConfig) {
             grid[ik][jk].hetNucleateHere = false;
             grid[ik][jk].homoNucleateHere = false;
             grid[ik][jk].sumGrains = 0;
+            grid[ik][jk].xPos = jk;
+            grid[ik][jk].yPos = ik;
 
         };
     }
@@ -175,12 +179,12 @@ void gridField::update(
         if (!n) continue;
         
         // update phase
-        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*4e-14;
+        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*8e-15;
         double grainHereCount = 0.0;
 
         // update grain phases
         for (int g = 0; g < 9; g++) {
-            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*3e-14);
+            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*2.5e-14);
             grainHereCount = grainHereCount + pow(n->grainPhases[g],2);
             
 
@@ -194,7 +198,7 @@ void gridField::update(
     // THERMODYNAMIC particle update: dC/dt = mobility * laplacian(μ)
     // Particles flow DOWN the chemical potential gradient to minimize free energy
     // μ is computed in calcParticleCompDiff() and stored in tempPartComp array
-    const double particleMobilityLiquid = 1e-14;   // high mobility in liquid
+    const double particleMobilityLiquid = 1e-16;   // high mobility in liquid
     const double particleMobilitySolid = 1e-24;    // lower mobility in solid
     double dx = mConfig.dx;
     double denom = (dx * dx);
@@ -233,10 +237,10 @@ void gridField::update(
         
         // Flux: J = mobility * laplacian(μ)
         // This drives particles toward lower μ regions (energy minima)
-        double flux = mobility * lapMu / denom;
+        double flux = -1*mobility * lapMu / denom;
         
         // Store change
-        particleCompChange[ptr] = -1*mConfig.dt * flux;
+        particleCompChange[ptr] = mConfig.dt * flux;
     }
     
     auto t1_end = std::chrono::steady_clock::now();
@@ -335,15 +339,10 @@ void gridField::update(
             if (n->grainsHere > 0 ) grainExists = 1;
             if (n->grainsToAdd > 0) grainExists = 1;
             if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,3) * mConfig.dt * n->calcNucRate(mConfig) * -1))) { 
-                 addGrain(n);
+                 n->homoNucleateHere = true;
              }
-            if (!grainExists && (1000*(-0.0212 *n->temp + 61.3952)/mConfig.molarVolume - mConfig.hetNucUnderCooling) > 0 && prob_dist(gen) < n->particleComp*mConfig.dt && globAvailPart > 1) { 
-                 addGrain(n);
-                for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
-                    node* nt = allNodes[ptr];
-                    nt->particleComp = nt->particleComp - ((nt->particleComp *(1-nt->phase))/globAvailPart)*(globAvailPart-1);
-                }
-                n->particleComp = 1;
+            if (!grainExists && (1000*(-0.0212 *n->temp + 61.3952)/mConfig.molarVolume - mConfig.hetNucUnderCooling) > 0 && prob_dist(gen) < n->particleComp*mConfig.dt) { 
+                 n->hetNucleateHere = true;
              }
          }
         
@@ -372,7 +371,7 @@ void gridField::update(
             n->particleComp = 1;
             float sumChanged = 0;
             int distance = 1;
-
+            std::cout << "Heterogeneous Nucleation at Node " << n->id << " (x=" << n->xPos << ", y=" << n->yPos << ")\n";
             while (true) {
                 for (int idx = 0; idx < TOTAL_NODES;idx++) {
                     node* nt = allNodes[idx];
@@ -382,30 +381,45 @@ void gridField::update(
                     if (sqrt(pow(dx,2) + pow(dy,2)) <= distance and sqrt(pow(dx,2) + pow(dy,2)) > distance-1) {
                         float partCompChange = (nt->particleComp *(1-nt->phase));
                         nt->particleComp = nt->particleComp - partCompChange;
-                        sumChanged += partCompChange;
+                        sumChanged = sumChanged + partCompChange;
                     }
+                    
                     if (sumChanged >= 1) break;
                 }
 
                 if (sumChanged >= 1) break;
                 distance++;
             }
-        }
+            }
         if (n->homoNucleateHere) {  
             // Handle homogeneous nucleation
             n->homoNucleateHere = false;
             globalField.addGrain(n);
-           
             
-            n->neighbors[0]->particleComp += 0.125*n->particleComp;
-            n->neighbors[1]->particleComp += 0.125*n->particleComp;
-            n->neighbors[2]->particleComp += 0.125*n->particleComp;
-            n->neighbors[3]->particleComp += 0.125*n->particleComp;
-            n->neighbors[4]->particleComp += 0.125*n->particleComp;
-            n->neighbors[5]->particleComp += 0.125*n->particleComp;
-            n->neighbors[6]->particleComp += 0.125*n->particleComp;
-            n->neighbors[7]->particleComp += 0.125*n->particleComp;
+            // Calculate total liquid fraction across all nodes
+            double totalLiquidFraction = 0.0;
+            for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
+                node* nt = allNodes[ptr];
+                if (nt && nt->exists != 0) {
+                    totalLiquidFraction += (1.0 - nt->phase);
+                }
+            }
+            
+            // Distribute particles proportionally to liquid fraction across all nodes, total = 1
+            if (totalLiquidFraction > 0.0) {
+                for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
+                    node* nt = allNodes[ptr];
+                    if (nt && nt->exists != 0) {
+                        double liquidFraction = (1.0 - nt->phase);
+                        double addAmount = liquidFraction / totalLiquidFraction;
+                        nt->particleComp += addAmount;
+                        nt->particleComp = std::max(0.0, std::min(1.0, nt->particleComp));
+                    }
+                }
+            }
+            
             n->particleComp = 0;
+            std::cout << "Homogeneous Nucleation at Node " << n->id << " (x=" << n->xPos << ", y=" << n->yPos << ")\n";
             
         }
 

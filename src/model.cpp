@@ -400,7 +400,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
          nExist++;
      }
      lapC = sumNeighC - nExist * c;  // (sum of neighbors - 4*center)
-     lapC *= (1/(modelConfig.dx*modelConfig.dx));
+     lapC *= (1e-8/(modelConfig.dx*modelConfig.dx));
 
      
     // Variational chemical potential: μ = ∂f/∂c - kappa * laplacian(c)
