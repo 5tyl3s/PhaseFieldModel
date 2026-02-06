@@ -158,23 +158,29 @@ config inputConfig(std::string configSource) {
 
     newConfig.molarMass = readOr<double>(j, "molarMass", 95.95);
     newConfig.molarVolume = newConfig.molarMass / (newConfig.density * 1000);
+    std::cout << "Molar Volume: " << newConfig.molarVolume << " m^3/mol" << std::endl;
 
     newConfig.particleSolidIntEnergy = readOr<double>(j, "particleSolidIntEnergy", 2.0);
     newConfig.particleLiquidIntEnergy = readOr<double>(j, "particleLiqIntEnergy", 1.0);
     newConfig.particleDiameter = readOr<double>(j, "particleDiameter_um", 1.0) * 1e-6;
     newConfig.particleRadius = newConfig.particleDiameter / 2.0;
+    std::cout << "Particle Radius set to: " << newConfig.particleRadius << " m" << std::endl;
     // Discretization steps
     int height = static_cast<int>(std::ceil(newConfig.cellHeight / newConfig.dx));
     int width  = static_cast<int>(std::ceil(newConfig.cellWidth / newConfig.dx));
     newConfig.steps = {height, width};
     newConfig.totalSteps = height * width;
-
-    newConfig.hetNucUnderCooling = (3.1415*pow(newConfig.particleRadius,2)*(newConfig.particleSolidIntEnergy - newConfig.particleLiquidIntEnergy)) - (3.14159 * pow((newConfig.particleRadius+ 0.3e-9),2) * newConfig.liqSolIntE);
-    
+    double energyTempConv = (newConfig.heatCapacity)/(newConfig.density)*newConfig.dx*newConfig.dx; // J/K
+    // Match MATLAB: ((pi*r^2)*(Es-El) + (pi*(r+0.3e-9)^2)*liqSolIntE) / energyTempConv
+    newConfig.hetNucUnderCooling = (
+        (3.141592653589793 * pow(newConfig.particleRadius,2) * (newConfig.particleSolidIntEnergy - newConfig.particleLiquidIntEnergy))
+        + (3.141592653589793 * pow((newConfig.particleRadius + 0.3e-9),2) * newConfig.liqSolIntE)
+    ) / energyTempConv; // temperature change (K)
+    std::cout << "Heterogeneous Nucleation Undercooling Threshold: " << newConfig.hetNucUnderCooling << " J/m^3" << std::endl;
     // Configuration flags
     newConfig.enableVisualization = readOr<bool>(j, "enableVisualization", true);
     newConfig.enableProfiling = readOr<bool>(j, "enableProfiling", true);
-    
+    newConfig.particleDensity = 3150;
     newConfig.success = 1; // successful load
     return newConfig;
 }

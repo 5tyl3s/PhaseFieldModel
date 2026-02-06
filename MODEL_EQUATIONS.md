@@ -45,7 +45,7 @@ $$E_{\text{local}} = (-2 + 2\phi) \cdot u_c \cdot \Delta G_{\text{sol}} + 2\phi(
 
 $$+ A_\phi \left[2(\phi - 1) \sum_g \psi_g + 2\phi \left(1 - \sum_g \psi_g\right) + (2\phi - 2) \sum_g \psi_g \right]$$
 
-$$+ \phi \cdot c_p^2 \cdot \gamma_s \cdot f_s + (2\phi - 2) \cdot c_p^2 \cdot \gamma_l \cdot f_l$$
+$$+ \phi \cdot c_p \cdot \gamma_s \cdot f_s + (2\phi - 2) \cdot c_p \cdot \gamma_l \cdot f_l$$
 
 where:
 - $u_c$ = undercooling fraction (dimensionless, 0 to 1)
@@ -56,6 +56,7 @@ where:
 - $c_p$ = particle composition
 - $\gamma_s, \gamma_l$ = particle-solid and particle-liquid interfacial energies
 - $f_s, f_l$ = surface-to-volume ratio of particles
+ - Implementation note: the model uses a linear dependence on particle composition (`c_p`) in the phase local energy (i.e., terms proportional to `c_p` rather than `c_p^2`). This reduces the strong repulsive chemical-potential effect of a quadratic term and better matches the current code.
 
 ### Phase Gradient Energy
 Using 4-point Laplacian (von Neumann stencil):
@@ -144,6 +145,16 @@ where:
 - $\gamma_s, \gamma_l$ = particle interfacial energies
 - $f_s = 0.66 \times 4\pi r_p^2 / \left(\frac{4}{3}\pi r_p^3\right)$ = surface-to-volume ratio
 
+Implementation detail: the code adds a Laplacian smoothing contribution to the chemical potential (a discrete approximation of -kappa \nabla^2 c). Concretely the implementation computes
+
+$$\text{lapC} = \left(\sum_{\text{4-neighbors}} c_{\text{nbr}} - n\cdot c_{\text{center}}\right) \times \frac{1\times 10^{-2}}{(\Delta x)^2}$$
+
+and then uses
+
+$$\mu = \mu_{\text{local}} + \text{lapC}$$
+
+Note: a `kappaParticle` constant (1e-8) is declared in the code comments, but the implemented laplacian contribution currently uses the numeric prefactor shown above (the `1e-2/(\Delta x)^2` factor). This is an implementation-level smoothing term to reduce sharp composition jumps and is clamped for numerical stability in the code.
+
 ### Particle Mobility
 The mobility is phase-dependent (higher in liquid):
 
@@ -225,13 +236,35 @@ $$c_p(i) \gets c_p(i) + \frac{(1 - \phi(i))}{L_{\text{total}}}$$
 4. Clamp all values to [0, 1]
 
 ### Heterogeneous Nucleation
-**Condition**: Occurs when undercooling exceeds threshold AND particles available:
+**Condition**: Heterogeneous nucleation is evaluated using a temperature-driven driving force computed per node and a startup-computed undercooling requirement based on particle energetics.
 
-$$\Delta G_{\text{het}} = 1000 \times \frac{m_{\text{slope}} \cdot T + b_{\text{intercept}}}{\bar{V}} > \Delta T_{\text{het,uc}}$$
+Per-node driving force (as used elsewhere in the code):
+
+$$\Delta G_{\text{het}}(T) = 1000 \cdot \frac{m_{\text{slope}} \cdot T + b_{\text{intercept}}}{\bar{V}}$$
+
+The heterogeneous-nucleation undercooling threshold is computed at startup (in `importConfig.cpp`) using the MATLAB expression you provided. The code computes an energy-to-temperature conversion
+
+$$\text{energyTempConv} = \frac{c_p}{\rho} \; (\Delta x)^2$$
+
+and then computes the undercooling requirement (temperature change) as
+
+$$\Delta T_{\text{het}} = \frac{\pi r_p^2 (E_s - E_l) + \pi (r_p + 0.3\times10^{-9})^2 \; \gamma_{LS}}{\text{energyTempConv}}$$
+
+where:
+- $r_p$ = particle radius
+- $E_s$ = particle solid-interface energy
+- $E_l$ = particle liquid-interface energy
+- $\gamma_{LS}$ = liquid–solid interfacial energy (the code uses `liqSolIntE`)
+
+Heterogeneous nucleation is permitted when the local driving force expressed as an equivalent temperature (via the driving-force formula above) exceeds this startup-computed undercooling threshold:
+
+$$\Delta G_{\text{het}}(T) \text{ (as evaluated at node temperature } T) \; > \; \Delta T_{\text{het}}$$
 
 AND
 
-$$P_{\text{het}} = c_p \cdot \Delta t \quad (\text{particle consumption rate})$$
+$$P_{\text{het}} = c_p \cdot \Delta t \quad (\text{particle consumption probability/rate})$$
+
+Implementation note: `importConfig.cpp` computes `hetNucUnderCooling` from the formula above and documents it as a temperature change (K). The nucleation handler uses `drivingForceSlopek`/`drivingForceIntercept` and the local `molarVolume` to compute the per-node driving force which is compared to `hetNucUnderCooling`. If you prefer the comparison done purely in energetic units (J/m^3) instead of temperature, we can adjust either the startup conversion or the driving-force expression to ensure exact unit consistency.
 
 **Particle Redistribution** (NEW): When heterogeneous nucleation occurs at node $n$:
 1. Set nucleation node: $c_p(n) \gets 1$ (maximum particle absorption)
@@ -243,6 +276,8 @@ $$P_{\text{het}} = c_p \cdot \Delta t \quad (\text{particle consumption rate})$$
    $$c_p(\text{neighbor}) \gets c_p(\text{neighbor}) - \text{Remove}$$
 4. Stop when $L \geq 1$ or all nodes processed
 5. Clamp all values to [0, 1]
+
+**Implementation note:** The nucleation handler invokes `gridField::addGrain(node*)`, which initializes a grain at the nucleation node and attempts to register the new grain on the immediate neighbor nodes as well. The implementation enforces an upper limit of 9 active grains stored per node; additions performed during nucleation check this limit and will not write past the array bounds. If a node already has 9 active grains, further additions for that node are skipped to preserve consistent `grainsHere` tracking.
 
 ---
 
@@ -262,6 +297,8 @@ $$\mathbf{O}_g^{\text{stored}} = \mathbf{O}_g^{\text{neighbor}}$$
 
 ### Grain Activation
 At the end of timestep, pending grains are activated and grain boundary energy is computed based on stored orientation.
+
+**Implementation note:** Pending grains are temporarily stored in per-node buffers (`addGrainsHere`, `addGrainsOrientations`) and applied to the node's active arrays at timestep end. During this transfer the code verifies `grainsHere < 9` before committing each pending grain; pending grains that would exceed the per-node capacity (9) are ignored. This explicit bounds checking prevents overflow, keeps `grainsHere` consistent, and ensures the node's active-grain array size is never exceeded.
 
 ---
 
@@ -329,6 +366,8 @@ At the end of timestep, pending grains are activated and grain boundary energy i
 | Particle mobility (solid) | $M_{\text{solid}}$ | 1×10⁻²⁴ | m²/(J·s) | Tuning parameter |
 | Initial particle volume fraction | $c_p^0$ | 0.01 | - | Initial condition |
 | Particle diameter | $d_p$ | 1.0 | μm | |
+| Particle chemical-potential laplacian prefactor | — | implementation value: `1e-2/(\Delta x)^2` | (code units) | Discrete smoothing used in `calcParticleCompDiff()` |
+| Declared particle gradient coeff. | $\kappa_{particle}$ | 1e-8 | (code constant) | Declared but not directly applied; see implementation note above |
 
 ### Phase & Grain Field Evolution Tuning Coefficients (Critical!)
 

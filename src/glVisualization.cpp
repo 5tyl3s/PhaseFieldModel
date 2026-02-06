@@ -437,6 +437,84 @@ void GLVisualizer::updateTextureBlueYellow(GLuint textureID, const std::vector<s
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+// Particle visualization: linear scale from 0 to highest value != 1.0; values equal to 1.0 shown in red
+void GLVisualizer::updateTextureParticle(GLuint textureID, const std::vector<std::vector<float>>& data, const gridField& field) {
+    std::vector<unsigned char> pixelData;
+    pixelData.reserve(gridRows * gridCols * 4);
+
+    const float eps = 1e-8f;
+    float maxNonOne = 0.0f;
+    float globalMax = 0.0f;
+    int nonOneCount = 0;
+    
+    for (const auto& row : data) {
+        for (float v : row) {
+            if (v > globalMax) globalMax = v;
+            if (v < 1.0f - eps) {
+                nonOneCount++;
+                if (v > maxNonOne) maxNonOne = v;
+            }
+        }
+    }
+    
+    // If we found non-one values, use the max of those; otherwise use global max as reference
+    float scale = maxNonOne;
+    if (scale <= 0.0f || nonOneCount == 0) {
+        // No meaningful non-one values found; use global max or default to 1.0
+        scale = (globalMax > 0.0f && globalMax < 1.0f) ? globalMax : 1.0f;
+    }
+    if (scale <= 0.0f) scale = 1.0f; // final safety check
+
+    for (int i = 0; i < gridRows; ++i) {
+        for (int j = 0; j < gridCols; ++j) {
+            float v = data[i][j];
+            const node& n = field.grid[i][j];
+            
+            // Check for nucleation site markers (highest priority)
+            if (n.hetNucleationSite) {
+                // Heterogeneous nucleation site: pure red
+                pixelData.push_back(255);
+                pixelData.push_back(0);
+                pixelData.push_back(0);
+                pixelData.push_back(255);
+            } else if (n.homoNucleationSite) {
+                // Homogeneous nucleation site: pink (red + some blue)
+                pixelData.push_back(255);
+                pixelData.push_back(192);
+                pixelData.push_back(203);
+                pixelData.push_back(255);
+            } else if (v >= 1.0f - eps) {
+                // Particle composition = 1: red
+                pixelData.push_back(255);
+                pixelData.push_back(0);
+                pixelData.push_back(0);
+                pixelData.push_back(255);
+            } else {
+                // scale linearly from 0 -> scale to blue->yellow (r,g = norm, b = 1-norm)
+                float norm = v / scale;
+                if (norm < 0.0f) norm = 0.0f;
+                if (norm > 1.0f) norm = 1.0f;
+                unsigned char r = static_cast<unsigned char>(std::round(255.0f * norm));
+                unsigned char g = static_cast<unsigned char>(std::round(255.0f * norm));
+                unsigned char b = static_cast<unsigned char>(std::round(255.0f * (1.0f - norm)));
+                pixelData.push_back(r);
+                pixelData.push_back(g);
+                pixelData.push_back(b);
+                pixelData.push_back(255);
+            }
+        }
+    }
+
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, gridCols, gridRows, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 // Log-scaled Phase/Particle: blue (0) -> yellow (max) mapping using log10 scale for positive values
 void GLVisualizer::updateTextureBlueYellowLog(GLuint textureID, const std::vector<std::vector<float>>& data) {
     std::vector<unsigned char> pixelData;
@@ -680,7 +758,7 @@ void GLVisualizer::updateFromGrid(const gridField& field) {
     glBindTexture(GL_TEXTURE_2D, 0);
 
     updateTextureTemp(textureTemp, temp, maxTemp);
-    updateTextureBlueYellow(textureParticle, particle);
+    updateTextureParticle(textureParticle, particle, field);
 }
 
 void GLVisualizer::render() {

@@ -2,6 +2,7 @@
 #include <iostream>
 #include <random>
 #include <cmath>
+
 // This line actually creates the global object in memory
 gridField globalField;
 std::array<std::array<double,1000>,1000> tempGrid;
@@ -63,6 +64,7 @@ void gridField::init(config modelConfig) {
 
     // store config for use in update()
     mConfig = modelConfig;
+    canNucleate = true;  // Enable nucleation at start
 
     buildGrid();
     top.grainPhases = {};
@@ -77,11 +79,18 @@ void gridField::init(config modelConfig) {
     top.activeGrains = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
     bottom.activeGrains = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
     numGrains = 0;
+    top.exists = 0; // no-flux boundary
+    bottom.exists = 0; // no-flux boundary
+    
+    static thread_local std::mt19937 rng{std::random_device{}()};
+    static thread_local std::uniform_real_distribution<double> dist(0.9, 1.1);
+
+
 
     for (int ik = 0; ik < GRID_ROWS; ik++) {
         for (int jk = 0; jk < GRID_COLS; jk++) {
             grid[ik][jk].phase = 0.0;
-            grid[ik][jk].particleComp = modelConfig.particleVolFraction;
+            grid[ik][jk].particleComp = modelConfig.particleVolFraction *dist(rng);
             grid[ik][jk].exists = 1;
             grid[ik][jk].grainsHere = 0;
             grid[ik][jk].grainPhases = {0,0,0,0,0,0,0,0,0};
@@ -97,8 +106,12 @@ void gridField::init(config modelConfig) {
             grid[ik][jk].sumGrains = 0;
             grid[ik][jk].xPos = jk;
             grid[ik][jk].yPos = ik;
+            grid[ik][jk].nucleatedHere = false;
+            grid[ik][jk].hasHetNucleated = false;
+            grid[ik][jk].hetNucleationSite = false;
+            grid[ik][jk].homoNucleationSite = false;
 
-        };
+        }
     }
 }
 
@@ -111,35 +124,46 @@ void gridField::addGrain(node* nucleus) {
     std::normal_distribution<> dist(45,45);
     eulerAngles tempRots = {dist(gen),dist(gen),dist(gen)};
     // Initialize the grain at the nucleus location
-    nucleus->grainsHere = nucleus->grainsHere + 1;
-    nucleus->activeGrains[nucleus->grainsHere-1] = numGrains-1;
-    nucleus->grainPhases[nucleus->grainsHere-1] = 1;
+    if (nucleus->grainsHere < 9) {
+        nucleus->activeGrains[nucleus->grainsHere] = numGrains-1;
+        nucleus->grainPhases[nucleus->grainsHere] = 1;
+        nucleus->orientations[nucleus->grainsHere] = tempRots;
+        nucleus->grainsHere++;
+    }
     nucleus->phase = 1;
-    nucleus->orientations[nucleus->grainsHere-1] = tempRots;
 
-    nucleus->neighbors[0]->grainsHere = nucleus->neighbors[0]->grainsHere + 1;
-    nucleus->neighbors[0]->activeGrains[nucleus->neighbors[0]->grainsHere-1] = numGrains-1;
-    nucleus->neighbors[0]->orientations[nucleus->neighbors[0]->grainsHere-1] = tempRots;
-    nucleus->neighbors[0]->grainPhases[nucleus->neighbors[0]->grainsHere-1] = .5;
-    nucleus->neighbors[1]->grainsHere = nucleus->neighbors[1]->grainsHere + 1;
-    nucleus->neighbors[1]->activeGrains[nucleus->neighbors[1]->grainsHere-1] = numGrains-1;
-    nucleus->neighbors[1]->orientations[nucleus->neighbors[1]->grainsHere-1] = tempRots;
-    nucleus->neighbors[1]->grainPhases[nucleus->neighbors[1]->grainsHere-1] = .5;
+    if (nucleus->neighbors[0]->grainsHere < 9) {
+        nucleus->neighbors[0]->activeGrains[nucleus->neighbors[0]->grainsHere] = numGrains-1;
+        nucleus->neighbors[0]->orientations[nucleus->neighbors[0]->grainsHere] = tempRots;
+        nucleus->neighbors[0]->grainPhases[nucleus->neighbors[0]->grainsHere] = 1;
+        nucleus->neighbors[0]->grainsHere++;
+    }
+    
+    if (nucleus->neighbors[1]->grainsHere < 9) {
+        nucleus->neighbors[1]->activeGrains[nucleus->neighbors[1]->grainsHere] = numGrains-1;
+        nucleus->neighbors[1]->orientations[nucleus->neighbors[1]->grainsHere] = tempRots;
+        nucleus->neighbors[1]->grainPhases[nucleus->neighbors[1]->grainsHere] = 1;
+        nucleus->neighbors[1]->grainsHere++;
+    }
 
 
 
 
     if (nucleus->neighbors[2]->exists != 0) {
-        nucleus->neighbors[2]->grainsHere = nucleus->neighbors[2]->grainsHere + 1;
-        nucleus->neighbors[2]->activeGrains[nucleus->neighbors[2]->grainsHere-1] = numGrains-1;
-        nucleus->neighbors[2]->orientations[nucleus->neighbors[2]->grainsHere-1] = tempRots;
-        nucleus->neighbors[2]->grainPhases[nucleus->neighbors[2]->grainsHere-1] = .5;
+        if (nucleus->neighbors[2]->grainsHere < 9) {
+            nucleus->neighbors[2]->activeGrains[nucleus->neighbors[2]->grainsHere] = numGrains-1;
+            nucleus->neighbors[2]->orientations[nucleus->neighbors[2]->grainsHere] = tempRots;
+            nucleus->neighbors[2]->grainPhases[nucleus->neighbors[2]->grainsHere] = 1;
+            nucleus->neighbors[2]->grainsHere++;
+        }
     }
     if (nucleus->neighbors[3]->exists != 0) {
-        nucleus->neighbors[3]->grainsHere = nucleus->neighbors[3]->grainsHere + 1;
-        nucleus->neighbors[3]->activeGrains[nucleus->neighbors[3]->grainsHere-1] = numGrains-1;
-        nucleus->neighbors[3]->orientations[nucleus->neighbors[3]->grainsHere-1] = tempRots;
-        nucleus->neighbors[3]->grainPhases[nucleus->neighbors[3]->grainsHere-1] = .5;   
+        if (nucleus->neighbors[3]->grainsHere < 9) {
+            nucleus->neighbors[3]->activeGrains[nucleus->neighbors[3]->grainsHere] = numGrains-1;
+            nucleus->neighbors[3]->orientations[nucleus->neighbors[3]->grainsHere] = tempRots;
+            nucleus->neighbors[3]->grainPhases[nucleus->neighbors[3]->grainsHere] = 1;
+            nucleus->neighbors[3]->grainsHere++;
+        }
     }
 
 
@@ -179,12 +203,12 @@ void gridField::update(
         if (!n) continue;
         
         // update phase
-        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*8e-15;
+        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*5e-15;
         double grainHereCount = 0.0;
 
         // update grain phases
         for (int g = 0; g < 9; g++) {
-            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*2.5e-14);
+            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*5e-14);
             grainHereCount = grainHereCount + pow(n->grainPhases[g],2);
             
 
@@ -198,8 +222,8 @@ void gridField::update(
     // THERMODYNAMIC particle update: dC/dt = mobility * laplacian(μ)
     // Particles flow DOWN the chemical potential gradient to minimize free energy
     // μ is computed in calcParticleCompDiff() and stored in tempPartComp array
-    const double particleMobilityLiquid = 1e-16;   // high mobility in liquid
-    const double particleMobilitySolid = 1e-24;    // lower mobility in solid
+    const double particleMobilityLiquid = 1e-7;   // high mobility in liquid
+    const double particleMobilitySolid = 1e-18;    // lower mo6bility in solid
     double dx = mConfig.dx;
     double denom = (dx * dx);
     
@@ -217,30 +241,22 @@ void gridField::update(
 
         // Compute 4-point Laplacian of chemical potential
         double sumNeighMu = 0.0;
+        double sumNeighMobility = 0;
         int nExist = 0;
+        double mNeigh;
+        double selfM = (n->phase * particleMobilitySolid) + ((1.0 - n->phase) * particleMobilityLiquid);
+        double totFlow = 0.0;
         for (int nb = 0; nb < 4; nb++) {  // ONLY 4-point: left, right, up, down
-            node* nbr = n->neighbors[nb];
-            if (!nbr) continue;
-            if (nbr->exists == 0) continue; // no-flux boundary
-            sumNeighMu += tempPartComp[nbr->id];
-            nExist++;
+           node* nbr = n->neighbors[nb];
+           if (!nbr || nbr->exists == 0) continue;
+            mNeigh = 0.5*((nbr->phase * particleMobilitySolid) + ((1.0 - nbr->phase) * particleMobilityLiquid)+selfM);
+            double muFlux = mNeigh*(tempPartComp[nbr->id] - mu)/pow(dx,2);
+            totFlow += muFlux;
         }
-
-        double lapMu = 0.0;
-        if (nExist > 0) {
-            lapMu = (sumNeighMu - nExist * mu);  // (sum of 4 neighbors - 4*center)
-        }
-     
         // Choose mobility based on phase (liquid vs solid)
-        double liquidFrac = (1.0 - n->phase);  // 1 in liquid, 0 in solid
-        double mobility = particleMobilityLiquid * liquidFrac + particleMobilitySolid * (1.0 - liquidFrac);
-        
-        // Flux: J = mobility * laplacian(μ)
-        // This drives particles toward lower μ regions (energy minima)
-        double flux = -1*mobility * lapMu / denom;
-        
+       
         // Store change
-        particleCompChange[ptr] = mConfig.dt * flux;
+        particleCompChange[ptr] = mConfig.dt * totFlow/(dx*dx);
     }
     
     auto t1_end = std::chrono::steady_clock::now();
@@ -257,12 +273,12 @@ void gridField::update(
     for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
         node* n = allNodes[ptr];
         if (!n) continue;
-        n->particleComp = n->particleComp + particleCompChange[ptr];
+        double c = n->particleComp;
+        n->particleComp = n->particleComp + (c*(1-c)) * particleCompChange[ptr];
         
         
         // Clamp to [0, 1] to prevent unphysical values
-        if (n->particleComp < 0.0) n->particleComp = 0.0;
-        if (n->particleComp > 1.0) n->particleComp = 1.0;
+
     }
 
 
@@ -294,7 +310,7 @@ void gridField::update(
             }
             
             // Add ALL grains with phase >= best phase threshold
-            if (maxPhaseFromNeighbor > 0.3) {
+            if (maxPhaseFromNeighbor > 0.4) {
                 for (int rg = 0; rg < nbr->grainsHere; rg++) {
                     // Only propagate grains with phase >= best phase threshold
                     if (nbr->grainPhases[rg] >= maxPhaseFromNeighbor) {
@@ -341,8 +357,9 @@ void gridField::update(
             if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,3) * mConfig.dt * n->calcNucRate(mConfig) * -1))) { 
                  n->homoNucleateHere = true;
              }
-            if (!grainExists && (1000*(-0.0212 *n->temp + 61.3952)/mConfig.molarVolume - mConfig.hetNucUnderCooling) > 0 && prob_dist(gen) < n->particleComp*mConfig.dt) { 
+            if (!grainExists &&  n->temp < mConfig.meltTemp-(mConfig.hetNucUnderCooling)&& prob_dist(gen) < n->particleComp*mConfig.dt && !n->hasHetNucleated) { 
                  n->hetNucleateHere = true;
+                 std::cout << "Node " << n->id << " eligible for heterogeneous nucleation. Undercooling: " << (((1000*(-0.0212 *n->temp + 61.3952)/(mConfig.molarVolume))*1e-6) ) << " J/m^3, Particle Comp: " << n->particleComp << std::endl;
              }
          }
         
@@ -355,11 +372,13 @@ void gridField::update(
         if (!n) continue;
         // Add new grains from neighbors
         for (int ag = 0; ag < n->grainsToAdd; ag++) {
-            int newGrainID = n->addGrainsHere[ag];
-            n->activeGrains[n->grainsHere] = newGrainID;
-            // Use the pre-stored orientation from addGrainsOrientations
-            n->orientations[n->grainsHere] = n->addGrainsOrientations[ag];
-            n->grainsHere++;
+            if (n->grainsHere < 9) {
+                int newGrainID = n->addGrainsHere[ag];
+                n->activeGrains[n->grainsHere] = newGrainID;
+                // Use the pre-stored orientation from addGrainsOrientations
+                n->orientations[n->grainsHere] = n->addGrainsOrientations[ag];
+                n->grainsHere++;
+            }
         }
         n->grainsToAdd = 0;
         n->addGrainsHere = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
@@ -367,58 +386,29 @@ void gridField::update(
         if (n->hetNucleateHere) {
             // Handle heterogeneous nucleation
             n->hetNucleateHere = false;
+            n->nucleatedHere = true;
+            n->hasHetNucleated = true;  // Mark node as having undergone het nucleation (permanent)
+            n->hetNucleationSite = true;  // Track location for visualization (red)
             globalField.addGrain(n);
-            n->particleComp = 1;
+            
             float sumChanged = 0;
             int distance = 1;
             std::cout << "Heterogeneous Nucleation at Node " << n->id << " (x=" << n->xPos << ", y=" << n->yPos << ")\n";
-            while (true) {
-                for (int idx = 0; idx < TOTAL_NODES;idx++) {
-                    node* nt = allNodes[idx];
-                    if (nt->exists == 0) continue;
-                    int dx = abs(nt->xPos - n->xPos);
-                    int dy = abs(nt->yPos - n->yPos);
-                    if (sqrt(pow(dx,2) + pow(dy,2)) <= distance and sqrt(pow(dx,2) + pow(dy,2)) > distance-1) {
-                        float partCompChange = (nt->particleComp *(1-nt->phase));
-                        nt->particleComp = nt->particleComp - partCompChange;
-                        sumChanged = sumChanged + partCompChange;
-                    }
-                    
-                    if (sumChanged >= 1) break;
-                }
+          
 
-                if (sumChanged >= 1) break;
-                distance++;
-            }
-            }
+          
+        }
         if (n->homoNucleateHere) {  
+            n->nucleatedHere = true;
+            n->homoNucleationSite = true;  // Track location for visualization (pink)
             // Handle homogeneous nucleation
             n->homoNucleateHere = false;
             globalField.addGrain(n);
             
             // Calculate total liquid fraction across all nodes
-            double totalLiquidFraction = 0.0;
-            for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
-                node* nt = allNodes[ptr];
-                if (nt && nt->exists != 0) {
-                    totalLiquidFraction += (1.0 - nt->phase);
-                }
-            }
             
-            // Distribute particles proportionally to liquid fraction across all nodes, total = 1
-            if (totalLiquidFraction > 0.0) {
-                for (int ptr = 0; ptr < TOTAL_NODES; ptr++) {
-                    node* nt = allNodes[ptr];
-                    if (nt && nt->exists != 0) {
-                        double liquidFraction = (1.0 - nt->phase);
-                        double addAmount = liquidFraction / totalLiquidFraction;
-                        nt->particleComp += addAmount;
-                        nt->particleComp = std::max(0.0, std::min(1.0, nt->particleComp));
-                    }
-                }
-            }
             
-            n->particleComp = 0;
+            
             std::cout << "Homogeneous Nucleation at Node " << n->id << " (x=" << n->xPos << ", y=" << n->yPos << ")\n";
             
         }

@@ -241,7 +241,7 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
    double sizeScale = 0.66*4*3.14149 * pow(mConfig.particleRadius,2)/((4/3)*3.14159*pow(mConfig.particleRadius,3)); // surface area / volume
     
 
-    eLoc = eLoc +  ((pha) * pow(part,2)*mConfig.particleSolidIntEnergy*sizeScale) + ((2*pha-2) * (pow(part,2))*mConfig.particleLiquidIntEnergy*sizeScale);
+    eLoc = eLoc +  (pow(part,2)*mConfig.particleSolidIntEnergy*sizeScale) - (pow(part,2)*mConfig.particleLiquidIntEnergy*sizeScale);
     //std::cout << "After Grain and Particle Term: " << eLoc << std::endl;
     // Simple 4-point Laplacian (von Neumann): neighbors 0,1,2,3 = left,right,up,down
     double sumPh = 0.0;
@@ -346,7 +346,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
             std::cout << "Warning: Calculated GB energy below minimum. Clamping to minimum value." << std::endl;
             gbEnergy = 2.92;
         }
-        grainGrad = 0.5*0.5*grainGrad * gbEnergy; // scale gradient by local GB energy
+        grainGrad = 0.3*0.5*grainGrad * gbEnergy; // scale gradient by local GB energy
         //std::cout << "Grain Gradient: " << grainGrad << std::endl;
         // Compute interaction/comp terms
         double comp = sumOtherGrainsSquared - (gra*gra);
@@ -375,36 +375,32 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
      
      double c = nd->particleComp;
      double pha = nd->phase;
+     //Particle Volume
+     const double Vp = (4.0/3.0) * 3.14159 * std::pow(modelConfig.particleRadius, 3);
+     const double cellPackedVolume = 0.6*modelConfig.dx*modelConfig.dx*modelConfig.dx;
+
      
      // Chemical potential from local energy density:
      // f_particle = 2*c*pha^2*E_solid + 2*c*(1-pha)^2*E_liquid
      // ∂f/∂c = 2*pha^2*E_solid + 2*(1-pha)^2*E_liquid
-     double sizeScale = 0.66*4*3.14149 * pow(modelConfig.particleRadius,2)/((4/3)*3.14159*pow(modelConfig.particleRadius,3)); // surface area / volume
-     double muLocal = 2.0 *c * pha * pha * modelConfig.particleSolidIntEnergy*sizeScale
-                    + 2.0 *c * (1.0 - pha) * (1.0 - pha) * modelConfig.particleLiquidIntEnergy*sizeScale;
-     
+     double sizeScale = 0.6*4*3.14149 * pow(modelConfig.particleRadius,2)/((4/3)*3.14159*pow(modelConfig.particleRadius,3)); // surface area / volume
+     double muLocal = 2 *c  *pha * pow(modelConfig.dx,3) * modelConfig.particleSolidIntEnergy*sizeScale
+                    +2 *c * (1.0 - pha) * pow(modelConfig.dx,3)*modelConfig.particleLiquidIntEnergy*sizeScale
+                    + 1*(pow(modelConfig.dx,3)*(1.0 - std::cos(2*3.14159 * (c*cellPackedVolume) / Vp)))
+        ;
+    double muGrav = 9.81 * (modelConfig.particleDensity-modelConfig.density) *pow(modelConfig.dx,4) *nd->yPos;
+
+        if (c > 1) muLocal  = muLocal+ 5e-17*std::pow(10*(c-1),2);
+        if (c < 0) muLocal = muLocal-5e-17*std::pow(10*(c),2);
      // Add gradient (interfacial) contribution: particles also respond to composition gradients
      // This provides a smoothing penalty for sharp concentration jumps
      // Gradient energy = kappa * |grad(c)|^2, so ∂/∂c_i includes laplacian term
-     const double kappaParticle = 1e-8;  // interface energy coefficient (tune as needed)
-     double lapC = 0;
-     double sumNeighC = 0.0;
- 
 
-     int nExist = 0;
-     for (int nb = 0; nb < 4; nb++) {
-         node* nbr = nd->neighbors[nb];
-         if (!nbr) continue;
-         if (nbr->exists == 0) continue;
-         sumNeighC += nbr->particleComp;
-         nExist++;
-     }
-     lapC = sumNeighC - nExist * c;  // (sum of neighbors - 4*center)
-     lapC *= (1e-8/(modelConfig.dx*modelConfig.dx));
 
+    
      
     // Variational chemical potential: μ = ∂f/∂c - kappa * laplacian(c)
-    double mu = muLocal;
+    double mu = muLocal + muGrav;
 
     // Defensive checks: guard against NaN/Inf coming from bad inputs (e.g. uninitialized particle radius)
     if (!std::isfinite(mu) || std::isnan(mu)) {

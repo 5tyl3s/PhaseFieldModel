@@ -3,8 +3,8 @@
 #include "importConfig.hpp"
 
 // Define grid dimensions in one place. Change these values to the desired grid size.
-constexpr int GRID_ROWS = 150;
-constexpr int GRID_COLS = 150;
+constexpr int GRID_ROWS = 250;
+constexpr int GRID_COLS = 250;
 constexpr int TOTAL_NODES = GRID_ROWS * GRID_COLS;
 
 struct eulerAngles {
@@ -26,6 +26,10 @@ struct node {
     int yPos;
     bool hetNucleateHere;
     bool homoNucleateHere;
+    bool nucleatedHere;
+    bool hasHetNucleated;  // Permanent flag: node has already undergone heterogeneous nucleation
+    bool hetNucleationSite;  // Permanent tracking flag: this node was a het nucleation site (visualize red)
+    bool homoNucleationSite;  // Permanent tracking flag: this node was a homo nucleation site (visualize pink)
     std::array<int,9> addGrainsHere;
     std::array<eulerAngles, 9> addGrainsOrientations;
     int grainsToAdd;
@@ -49,6 +53,7 @@ struct gridField {
     node bottom;
     std::array<int,2> grainLocTemporary;
     long long diffEnergyTime;  // Store diff energy calculation time
+    bool canNucleate;  // Flag to enable/disable nucleation when particles available
 
     void buildGrid();
     void init(config modelConfig);

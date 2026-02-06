@@ -237,7 +237,7 @@ int main() {
     std::replace(outputVideo.begin(), outputVideo.end(), '\\', '/');
     
     // Build FFmpeg command using ffmpeg from PATH
-    std::string ffmpegCmd = "ffmpeg -framerate 30 -i \"" + framesPattern + "\" -c:v mpeg4 -q:v 5 -y \"" + outputVideo + "\"";
+    std::string ffmpegCmd = "ffmpeg -framerate 15 -i \"" + framesPattern + "\" -c:v mpeg4 -q:v 5 -y \"" + outputVideo + "\"";
     
     std::cout << "Running FFmpeg...\n";
     int ffmpegResult = system(ffmpegCmd.c_str());
