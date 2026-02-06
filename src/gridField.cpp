@@ -222,7 +222,7 @@ void gridField::update(
     // THERMODYNAMIC particle update: dC/dt = mobility * laplacian(μ)
     // Particles flow DOWN the chemical potential gradient to minimize free energy
     // μ is computed in calcParticleCompDiff() and stored in tempPartComp array
-    const double particleMobilityLiquid = 1e-7;   // high mobility in liquid
+    const double particleMobilityLiquid = 1e-6;   // high mobility in liquid
     const double particleMobilitySolid = 1e-18;    // lower mo6bility in solid
     double dx = mConfig.dx;
     double denom = (dx * dx);
@@ -354,10 +354,10 @@ void gridField::update(
             grainExists = 0;
             if (n->grainsHere > 0 ) grainExists = 1;
             if (n->grainsToAdd > 0) grainExists = 1;
-            if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,3) * mConfig.dt * n->calcNucRate(mConfig) * -1))) { 
+            if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,3) * mConfig.dt * n->calcNucRate(mConfig) * -1)) && n->phase < 0.1) { 
                  n->homoNucleateHere = true;
              }
-            if (!grainExists &&  n->temp < mConfig.meltTemp-(mConfig.hetNucUnderCooling)&& prob_dist(gen) < n->particleComp*mConfig.dt && !n->hasHetNucleated) { 
+            if (!grainExists &&  n->temp < mConfig.meltTemp-(mConfig.hetNucUnderCooling)&& prob_dist(gen) < n->particleComp*mConfig.dt && !n->hasHetNucleated && n->phase < 0.1) { 
                  n->hetNucleateHere = true;
                  std::cout << "Node " << n->id << " eligible for heterogeneous nucleation. Undercooling: " << (((1000*(-0.0212 *n->temp + 61.3952)/(mConfig.molarVolume))*1e-6) ) << " J/m^3, Particle Comp: " << n->particleComp << std::endl;
              }

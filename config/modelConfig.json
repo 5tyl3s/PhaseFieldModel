@@ -42,7 +42,7 @@
   "cellWidthum": 50,
 
   "particleVolumeFraction": 0.01,
-  "particleDiameter_um": 0.25,
+  "particleDiameter_um": 0.6,
 
   "LiqSolIntEnergyJm2": 2.92,
   "LiqSolIntWidthum": 1,
@@ -65,7 +65,7 @@
   "drivingForceSlopek": -0.0212,
   "drivingForceIntercept": 61.3952,
 
-  "particleSolidIntEnergy": 6.3,
+  "particleSolidIntEnergy": 8.3,
   "particleLiqIntEnergy": 3.0,
 
   "enableVisualization": true,
