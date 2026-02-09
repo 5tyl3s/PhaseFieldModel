@@ -83,14 +83,16 @@ void gridField::init(config modelConfig) {
     bottom.exists = 0; // no-flux boundary
     
     static thread_local std::mt19937 rng{std::random_device{}()};
-    static thread_local std::uniform_real_distribution<double> dist(0.9, 1.1);
+    static thread_local std::uniform_real_distribution<double> dist(0.5, 1.5);
+
+    
 
 
 
     for (int ik = 0; ik < GRID_ROWS; ik++) {
         for (int jk = 0; jk < GRID_COLS; jk++) {
             grid[ik][jk].phase = 0.0;
-            grid[ik][jk].particleComp = modelConfig.particleVolFraction *dist(rng);
+            //grid[ik][jk].particleComp = modelConfig.particleVolFraction *dist(rng);
             grid[ik][jk].exists = 1;
             grid[ik][jk].grainsHere = 0;
             grid[ik][jk].grainPhases = {0,0,0,0,0,0,0,0,0};
@@ -112,6 +114,14 @@ void gridField::init(config modelConfig) {
             grid[ik][jk].homoNucleationSite = false;
 
         }
+    }
+    double particleVolume = (4.0/3.0) * 3.14159 * std::pow(modelConfig.particleRadius, 3);
+    int numParts = static_cast<int>(std::round(GRID_ROWS * GRID_COLS * modelConfig.particleVolFraction*modelConfig.dx*modelConfig.dx*modelConfig.dx/particleVolume));
+    std::cout << "Initializing with " << numParts << " particles.\n";
+    for (int particle = 0; particle < numParts; particle++) {
+        int x = rng() % GRID_COLS;
+        int y = rng() % GRID_ROWS;
+        grid[y][x].particleComp += particleVolume/(modelConfig.dx*modelConfig.dx*modelConfig.dx); // convert from volume fraction to concentration
     }
 }
 
@@ -203,12 +213,12 @@ void gridField::update(
         if (!n) continue;
         
         // update phase
-        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*5e-15;
+        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*2e-14;
         double grainHereCount = 0.0;
 
         // update grain phases
         for (int g = 0; g < 9; g++) {
-            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*5e-14);
+            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*4e-14);
             grainHereCount = grainHereCount + pow(n->grainPhases[g],2);
             
 
@@ -222,7 +232,7 @@ void gridField::update(
     // THERMODYNAMIC particle update: dC/dt = mobility * laplacian(μ)
     // Particles flow DOWN the chemical potential gradient to minimize free energy
     // μ is computed in calcParticleCompDiff() and stored in tempPartComp array
-    const double particleMobilityLiquid = 1e-6;   // high mobility in liquid
+    const double particleMobilityLiquid = 1e-8;  // high mobility in liquid
     const double particleMobilitySolid = 1e-18;    // lower mo6bility in solid
     double dx = mConfig.dx;
     double denom = (dx * dx);
@@ -250,13 +260,13 @@ void gridField::update(
            node* nbr = n->neighbors[nb];
            if (!nbr || nbr->exists == 0) continue;
             mNeigh = 0.5*((nbr->phase * particleMobilitySolid) + ((1.0 - nbr->phase) * particleMobilityLiquid)+selfM);
-            double muFlux = mNeigh*(tempPartComp[nbr->id] - mu)/pow(dx,2);
+            double muFlux = mNeigh*(tempPartComp[nbr->id] - mu)/pow(dx,4);
             totFlow += muFlux;
         }
         // Choose mobility based on phase (liquid vs solid)
        
         // Store change
-        particleCompChange[ptr] = mConfig.dt * totFlow/(dx*dx);
+        particleCompChange[ptr] = 1*mConfig.dt * totFlow;
     }
     
     auto t1_end = std::chrono::steady_clock::now();
@@ -274,7 +284,7 @@ void gridField::update(
         node* n = allNodes[ptr];
         if (!n) continue;
         double c = n->particleComp;
-        n->particleComp = n->particleComp + (c*(1-c)) * particleCompChange[ptr];
+        n->particleComp = n->particleComp + particleCompChange[ptr];
         
         
         // Clamp to [0, 1] to prevent unphysical values

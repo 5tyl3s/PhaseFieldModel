@@ -163,7 +163,7 @@ config inputConfig(std::string configSource) {
     newConfig.particleSolidIntEnergy = readOr<double>(j, "particleSolidIntEnergy", 2.0);
     newConfig.particleLiquidIntEnergy = readOr<double>(j, "particleLiqIntEnergy", 1.0);
     newConfig.particleDiameter = readOr<double>(j, "particleDiameter_um", 1.0) * 1e-6;
-    newConfig.particleRadius = newConfig.particleDiameter / 2.0;
+
     std::cout << "Particle Radius set to: " << newConfig.particleRadius << " m" << std::endl;
     // Discretization steps
     int height = static_cast<int>(std::ceil(newConfig.cellHeight / newConfig.dx));

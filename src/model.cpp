@@ -377,7 +377,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
      double pha = nd->phase;
      //Particle Volume
      const double Vp = (4.0/3.0) * 3.14159 * std::pow(modelConfig.particleRadius, 3);
-     const double cellPackedVolume = 0.6*modelConfig.dx*modelConfig.dx*modelConfig.dx;
+     const double cellPackedVolume =modelConfig.dx*modelConfig.dx*modelConfig.dx;
 
      
      // Chemical potential from local energy density:
@@ -386,7 +386,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
      double sizeScale = 0.6*4*3.14149 * pow(modelConfig.particleRadius,2)/((4/3)*3.14159*pow(modelConfig.particleRadius,3)); // surface area / volume
      double muLocal = 2 *c  *pha * pow(modelConfig.dx,3) * modelConfig.particleSolidIntEnergy*sizeScale
                     +2 *c * (1.0 - pha) * pow(modelConfig.dx,3)*modelConfig.particleLiquidIntEnergy*sizeScale
-                    + 0.1*(pow(modelConfig.dx,2)*(1.0 - std::cos(2*3.14159 * (c*cellPackedVolume) / Vp)))
+                    + 12*(pow(modelConfig.dx,2)*(std::sin(2*3.14159 * (c*cellPackedVolume) / Vp)))
         ;
     double muGrav = 9.81 * (modelConfig.particleDensity-modelConfig.density) *pow(modelConfig.dx,4) *nd->yPos;
 
