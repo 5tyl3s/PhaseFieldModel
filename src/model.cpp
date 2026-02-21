@@ -230,7 +230,7 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     double driveToLiq = (0.0349*nd->temp - 101.0704)/mConfig.molarVolume; // J/m^3
     double driveToSol = (-0.0212 *nd->temp + 61.3952)/mConfig.molarVolume; // J/m^3
     //std::cout << "PhaseCoefficient is: " << mConfig.phaseCoefficient << std::endl;
-    double eLoc = (-2 + 2*pha) * uc * driveToSol  + 0.1*(2 * pha * (1 - uc)*driveToLiq );
+    double eLoc = (-2 + 2*pha) * uc * driveToSol  + (2 * pha * (1 - uc)*driveToLiq );
     
     //std::cout << "Phase: " << pha <<  " uc: " << uc <<" Local Term1: " << eLoc << std::endl;
     
@@ -346,12 +346,12 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
             std::cout << "Warning: Calculated GB energy below minimum. Clamping to minimum value." << std::endl;
             gbEnergy = 2.92;
         }
-        grainGrad = 0.3*0.5*grainGrad * gbEnergy; // scale gradient by local GB energy
+        grainGrad = 0.5 *grainGrad * gbEnergy; // scale gradient by local GB energy
         //std::cout << "Grain Gradient: " << grainGrad << std::endl;
         // Compute interaction/comp terms
         double comp = sumOtherGrainsSquared - (gra*gra);
         double notUC = 1.0 - underCool(nd->temp, mConfig.meltTemp);
-        double grainEnergy = mConfig.grainPreCo*((pow(gra,3)-gra)*underCool(nd->temp, mConfig.meltTemp) + (1e6*gra*comp*mConfig.grainIntWidth));
+        double grainEnergy = mConfig.grainPreCo*((pow(gra,3)-gra)*underCool(nd->temp, mConfig.meltTemp) + (gra*comp*mConfig.grainIntWidth));
         grainGrad = safeClamp(grainGrad, -1e12, 1e12);
         grainEnergy = safeClamp(grainEnergy, -1e12, 1e12);
         diffFree[g] = grainGrad + grainEnergy;

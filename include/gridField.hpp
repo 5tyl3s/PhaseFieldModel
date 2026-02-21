@@ -3,8 +3,8 @@
 #include "importConfig.hpp"
 
 // Define grid dimensions in one place. Change these values to the desired grid size.
-constexpr int GRID_ROWS = 250;
-constexpr int GRID_COLS = 400;
+constexpr int GRID_ROWS = 75;
+constexpr int GRID_COLS = 75;
 constexpr int TOTAL_NODES = GRID_ROWS * GRID_COLS;
 
 struct eulerAngles {
