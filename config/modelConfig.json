@@ -30,9 +30,9 @@
     "Note": "Removed keys: solidConductivityWMK, HomogeneousNucleationCoefficient, UndercoolingRequirement. Those are handled via defaults in code if needed."
   },
 
-  "dx_um": 1,
+  "dx_um": 0.5,
   "dt_s": 0.00000001,
-  "startTempK": 2896,
+  "startTempK": 2894,
   "meltTemp": 2896,
 
   "HeatCapacityJKgK": 251,
@@ -41,16 +41,16 @@
   "cellHeightum": 50,
   "cellWidthum": 50,
 
-  "particleVolumeFraction": 0.01,
-  "particleDiameter_um": 0.6,
+  "particleVolumeFraction": 0.02,
+  "particleDiameter_um": 0.3,
 
   "LiqSolIntEnergyJm2": 2.92,
   "LiqSolIntWidthum": 1,
   "GrainIntEnergyJm2": 2.92,
-  "GrainIntWidthum": 1,
+  "GrainIntWidthum": 1.5,
 
   "PhaseBarrierHeightCoefficient": 0.25,
-  "GrainBarrierHeightCoefficient": 0.125,
+  "GrainBarrierHeightCoefficient": 0.5,
 
   "BasePlateTempK": 500.0,
 
@@ -65,7 +65,7 @@
   "drivingForceSlopek": -0.0212,
   "drivingForceIntercept": 61.3952,
 
-  "particleSolidIntEnergy": 16.3,
+  "particleSolidIntEnergy": 32.3,
   "particleLiqIntEnergy": 3.0,
 
   "enableVisualization": true,

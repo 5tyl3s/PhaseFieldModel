@@ -236,7 +236,7 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     
     //std::cout << grainSum << std::endl;
 
-    eLoc = eLoc + mConfig.phaseCoefficient*(((2* pha-2) * nd->sumGrains)+(pha*2*(1 - nd->sumGrains)));
+    eLoc = eLoc + mConfig.phaseCoefficient*(((2* pha-2) * pow(nd->maxGrainPhase,2)));
     
    double sizeScale = 0.66*4*3.14149 * pow(mConfig.particleRadius,2)/((4/3)*3.14159*pow(mConfig.particleRadius,3)); // surface area / volume
     
@@ -245,11 +245,12 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     //std::cout << "After Grain and Particle Term: " << eLoc << std::endl;
     // Simple 4-point Laplacian (von Neumann): neighbors 0,1,2,3 = left,right,up,down
     double sumPh = 0.0;
-    int nCount = 0;
+    double nCount = 0;
     for (int nb = 0; nb < 4; nb++) {
         node* nbr = nd->neighbors[nb];
         if (!nbr) continue;
-        if (nbr->exists == 0) continue;
+        if (nbr->exists == 0) sumPh += pha; // treat non-existent neighbor as same phase (Neumann BC)
+        else
         sumPh += nbr->phase;
         nCount++;
     }
@@ -257,8 +258,8 @@ double calcPhaseDiffEnergy(node* nd, config mConfig) {
     if (nCount > 0) {
         lapPh = sumPh - nCount * pha;  // (sum of neighbors - 4*center)
     }
-    lapPh = lapPh* (1/(mConfig.dx*mConfig.dx));
-    double eGrad = lapPh * mConfig.phaseGradCo;
+    lapPh = -1*lapPh* (1/(mConfig.dx*mConfig.dx));
+    double eGrad = lapPh * 0.5*mConfig.phaseGradCo;
     //std::cout << "Phase Gradient Coefficient: " << mConfig.phaseGradCo << std::endl;
     double diffFree = eLoc + eGrad;
     //std::cout << "Phase Diff Energy: " << diffFree << " GradientTerm: " << eGrad << " Gradient:" << eGrad << std::endl ;
@@ -307,7 +308,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
 
         // Simple 4-point Laplacian (von Neumann)
         double sumGr = grainLeft + grainRight + grainUp + grainDown + 0.7071*(grainUpLeft + grainUpRight + grainDownLeft + grainDownRight);
-        int nCount = 0;
+        double nCount = 0;
         for(int nb = 0; nb < 4; nb++) {
             node* nbr = nd->neighbors[nb];
             if(nbr && nbr->exists != 0) nCount++;
@@ -322,7 +323,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
         }
         // Gradient term drives growth: negative Laplacian (center surrounded by grain) lowers energy
         // Multiply by -1 so that lapGr > 0 (neighbors > center) makes grainGrad negative (lowers energy)
-        double grainGrad = -2*lapGr *0.5*mConfig.grainGradCo / (mConfig.dx * mConfig.dx);
+        double grainGrad = -1*lapGr *mConfig.grainGradCo / (mConfig.dx * mConfig.dx);
 
        double gx = 0.0, gy = 0.0, gz = 0.0;
         double inv2dx = 0.5 / mConfig.dx;   // (right - left)/(2*dx)
@@ -351,7 +352,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
         // Compute interaction/comp terms
         double comp = sumOtherGrainsSquared - (gra*gra);
         double notUC = 1.0 - underCool(nd->temp, mConfig.meltTemp);
-        double grainEnergy = mConfig.grainPreCo*((pow(gra,3)-gra)*underCool(nd->temp, mConfig.meltTemp) + (gra*comp*mConfig.grainIntWidth));
+        double grainEnergy = mConfig.grainPreCo*(15*(pow(gra,3)-gra)*underCool(nd->temp, mConfig.meltTemp) + (500*gra*comp*mConfig.grainIntWidth));
         grainGrad = safeClamp(grainGrad, -1e12, 1e12);
         grainEnergy = safeClamp(grainEnergy, -1e12, 1e12);
         diffFree[g] = grainGrad + grainEnergy;
@@ -386,7 +387,7 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
      double sizeScale = 0.6*4*3.14149 * pow(modelConfig.particleRadius,2)/((4/3)*3.14159*pow(modelConfig.particleRadius,3)); // surface area / volume
      double muLocal = 2 *c  *pha * pow(modelConfig.dx,3) * modelConfig.particleSolidIntEnergy*sizeScale
                     +2 *c * (1.0 - pha) * pow(modelConfig.dx,3)*modelConfig.particleLiquidIntEnergy*sizeScale
-                    + 12*(pow(modelConfig.dx,2)*(std::sin(2*3.14159 * (c*cellPackedVolume) / Vp)))
+                    + 7*(pow(modelConfig.dx,2)*(std::sin(2*3.14159 * (c*cellPackedVolume) / Vp)))
         ;
     double muGrav = 9.81 * (modelConfig.particleDensity-modelConfig.density) *pow(modelConfig.dx,4) *nd->yPos;
 

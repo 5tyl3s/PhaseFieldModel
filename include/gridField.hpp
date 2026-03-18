@@ -3,8 +3,8 @@
 #include "importConfig.hpp"
 
 // Define grid dimensions in one place. Change these values to the desired grid size.
-constexpr int GRID_ROWS = 75;
-constexpr int GRID_COLS = 75;
+constexpr int GRID_ROWS = 150;
+constexpr int GRID_COLS = 150;
 constexpr int TOTAL_NODES = GRID_ROWS * GRID_COLS;
 
 struct eulerAngles {
@@ -19,6 +19,7 @@ struct node {
     double phase;
     double particleComp;
     double exists;
+    double maxGrainPhase;  // Track the maximum grain phase at this node for thresholding
     int sumGrains;
     int grainsHere;
     int heightPos;

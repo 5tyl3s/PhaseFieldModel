@@ -74,6 +74,8 @@ void gridField::init(config modelConfig) {
     bottom.grainPhases = {};
     bottom.phase = 1.00;
     bottom.exists = 0;
+    top.id = -1;
+    bottom.id = -1;
     bottom.particleComp = 0.0;  // No-flux boundary: initialize to safe value
     // mark slots as empty with -1 (valid grain IDs start at 0)
     top.activeGrains = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
@@ -213,17 +215,21 @@ void gridField::update(
         if (!n) continue;
         
         // update phase
-        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*3e-14;
+        n->phase = n->phase -(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[node]*1e-14;
         double grainHereCount = 0.0;
+        double maxGrainPhase = 0.0;
 
         // update grain phases
-        for (int g = 0; g < 9; g++) {
-            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*3e-14);
+        for (int g = 0; g < n->grainsHere; g++) {
+            n->grainPhases[g] = n->grainPhases[g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[node][g]*1e-14);
+            if (n->grainPhases[g] < 0.0) n->grainPhases[g] = 0.0;
+            if (n->grainPhases[g] > 1.0) n->grainPhases[g] = 1.0;
             grainHereCount = grainHereCount + pow(n->grainPhases[g],2);
-            
+            maxGrainPhase = std::max(maxGrainPhase, n->grainPhases[g]);
 
         }
         n->sumGrains = grainHereCount;
+        n->maxGrainPhase = maxGrainPhase;
     }
 
     // Profiling: Track time for first update (phase and grain updates)
@@ -232,7 +238,7 @@ void gridField::update(
     // THERMODYNAMIC particle update: dC/dt = mobility * laplacian(μ)
     // Particles flow DOWN the chemical potential gradient to minimize free energy
     // μ is computed in calcParticleCompDiff() and stored in tempPartComp array
-    const double particleMobilityLiquid = 1e-8;  // high mobility in liquid
+    const double particleMobilityLiquid = 4e-9;  // high mobility in liquid
     const double particleMobilitySolid = 1e-18;    // lower mo6bility in solid
     double dx = mConfig.dx;
     double denom = (dx * dx);
@@ -256,11 +262,22 @@ void gridField::update(
         double mNeigh;
         double selfM = (n->phase * particleMobilitySolid) + ((1.0 - n->phase) * particleMobilityLiquid);
         double totFlow = 0.0;
-        for (int nb = 0; nb < 4; nb++) {  // ONLY 4-point: left, right, up, down
-           node* nbr = n->neighbors[nb];
-           if (!nbr || nbr->exists == 0) continue;
-            mNeigh = 0.5*((nbr->phase * particleMobilitySolid) + ((1.0 - nbr->phase) * particleMobilityLiquid)+selfM);
-            double muFlux = mNeigh*(tempPartComp[nbr->id] - mu)/pow(dx,4);
+        double muFlux = 0.0;
+        for (int nb = 0; nb < 4; nb++) {
+            node* nbr = n->neighbors[nb];
+
+            double mu_nb = mu;
+            double mNeigh = selfM;
+
+            if (nbr && nbr->exists != 0) {
+                mu_nb = tempPartComp[nbr->id];
+                mNeigh = 0.5 * (
+                    (nbr->phase * particleMobilitySolid + (1.0 - nbr->phase) * particleMobilityLiquid)
+                    + selfM
+                );
+            }
+
+            muFlux = mNeigh * (mu_nb - mu) / pow(dx,4);
             totFlow += muFlux;
         }
         // Choose mobility based on phase (liquid vs solid)
