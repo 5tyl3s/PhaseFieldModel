@@ -18,12 +18,12 @@
 #include <filesystem>
 #include <iomanip>
 
-// Use compile-time TOTAL_NODES from header so sizes match the grid definition
-std::array<double, TOTAL_NODES> newTemp;
-std::array<std::array<double,9>, TOTAL_NODES> grainDiffEn;
-std::array<double, TOTAL_NODES> phaseDiffEn;
-std::array<double, TOTAL_NODES> tempGrad;
-std::array<double, TOTAL_NODES> tempPartComp;
+// Use vectors for dynamic allocation (size determined at runtime)
+std::vector<float> newTemp;
+std::vector<std::array<float,9>> grainDiffEn;
+std::vector<float> phaseDiffEn;
+std::vector<float> tempGrad;
+std::vector<float> tempPartComp;
 
 int main() {
     std::cout << "Hello, World!" << std::endl;
@@ -38,17 +38,28 @@ int main() {
         return 1;
     }
 
+    // Initialize grid with dimensions from config (default 500x500 if not specified)
+    int gridRows = configData.gridRows;
+    int gridCols = configData.gridCols;
+    
     //gridField model2;
-    globalField.init(configData);
+    globalField.init(configData, gridRows, gridCols);
+    
+    // Resize work vectors to match grid size
+    newTemp.resize(globalField.totalNodes);
+    grainDiffEn.resize(globalField.totalNodes);
+    phaseDiffEn.resize(globalField.totalNodes);
+    tempGrad.resize(globalField.totalNodes);
+    tempPartComp.resize(globalField.totalNodes);
+    
     auto cwd = std::filesystem::current_path();
     std::cout << "Current working directory: " << cwd << std::endl << std::flush;
     std::cout << "About to start PhaseField Sim..." << std::endl << std::flush;
     auto start1 = std::chrono::steady_clock::now();
-    node* nd2;
     std::cout << "Starting Time Steps..." << std::endl << std::flush;
 
     // create visualizer before the simulation so it updates live
-    GLVisualizer visualizer(GRID_ROWS, GRID_COLS, 150);
+    GLVisualizer visualizer(globalField.gridRows, globalField.gridCols, 150);
     bool haveViz = false;
     if (configData.enableVisualization) {
         if (visualizer.initialize("Phase Field Visualization")) {
@@ -88,17 +99,14 @@ int main() {
         if (t > 0 && (t % 2000 == 0)) {
             bool allSolidified = true;
             bool allHaveGrains = true;
-            for (int i = 0; i < GRID_ROWS && allSolidified; ++i) {
-                for (int j = 0; j < GRID_COLS && allSolidified; ++j) {
-                    node& n = globalField.grid[i][j];
-                    // Check if solidified (phase >= 1.0)
-                    if (n.phase < 0.9999) {
-                        allSolidified = false;
-                    }
-                    // Check if has a grain
-                    if (n.grainsHere <= 0) {
-                        allHaveGrains = false;
-                    }
+            for (int idx = 0; idx < globalField.totalNodes && allSolidified; ++idx) {
+                // Check if solidified (phase >= 1.0)
+                if (globalField.nodes.phase[idx] < 0.9999) {
+                    allSolidified = false;
+                }
+                // Check if has a grain
+                if (globalField.nodes.grainsHere[idx] <= 0) {
+                    allHaveGrains = false;
                 }
             }
             if (allSolidified && allHaveGrains) {
@@ -111,13 +119,12 @@ int main() {
         if (configData.enableProfiling) {
             totalSolidCheckTime += std::chrono::duration_cast<std::chrono::microseconds>(solidCheckEnd - solidCheckStart).count();
         }
-        #pragma omp parallel for private(nd2)
-        for (int node = 0; node < TOTAL_NODES; node++) {
-            nd2 = globalField.allNodes[node];
-            tempGrad[node] = calcTemp(nd2,configData,t);
-            phaseDiffEn[node] = calcPhaseDiffEnergy(nd2, configData);
-            tempPartComp[node] = calcParticleCompDiff(nd2, configData);
-            grainDiffEn[node] = calcGrainDiffEnergy(nd2, configData);
+        #pragma omp parallel for
+        for (int node = 0; node < globalField.totalNodes; node++) {
+            tempGrad[node] = calcTemp(node, configData, t);
+            phaseDiffEn[node] = calcPhaseDiffEnergy(node, configData);
+            tempPartComp[node] = calcParticleCompDiff(node, configData);
+            grainDiffEn[node] = calcGrainDiffEnergy(node, configData);
         }
         auto diffEnergyEnd = std::chrono::steady_clock::now();
         long long diffEnergyTime = 0;
@@ -149,8 +156,8 @@ int main() {
             } else {
                 winW = 0; winH = 0;
             }
-            // fallback: use GRID_COLS/ROWS scaled to pixels; assume 800x800 if 0
-            if (winW == 0 || winH == 0) { winW = GRID_COLS; winH = GRID_ROWS; }
+            // fallback: use gridCols/gridRows scaled to pixels; assume 800x800 if 0
+            if (winW == 0 || winH == 0) { winW = globalField.gridCols; winH = globalField.gridRows; }
 
             // allocate buffer and read pixels
             std::vector<unsigned char> pixels(winW * winH * 4);

@@ -468,16 +468,17 @@ void GLVisualizer::updateTextureParticle(GLuint textureID, const std::vector<std
     for (int i = 0; i < gridRows; ++i) {
         for (int j = 0; j < gridCols; ++j) {
             float v = data[i][j];
-            const node& n = field.grid[i][j];
+            int nodeIdx = i * gridCols + j;
+            auto& nd = field.nodes;
             
             // Check for nucleation site markers (highest priority)
-            if (n.hetNucleationSite) {
+            if (nd.hetNucleationSite[nodeIdx]) {
                 // Heterogeneous nucleation site: pure red
                 pixelData.push_back(255);
                 pixelData.push_back(0);
                 pixelData.push_back(0);
                 pixelData.push_back(255);
-            } else if (n.homoNucleationSite) {
+            } else if (nd.homoNucleationSite[nodeIdx]) {
                 // Homogeneous nucleation site: pink (red + some blue)
                 pixelData.push_back(255);
                 pixelData.push_back(192);
@@ -621,23 +622,27 @@ void GLVisualizer::updateFromGrid(const gridField& field) {
 
     for (int i = 0; i < gridRows; ++i) {
         for (int j = 0; j < gridCols; ++j) {
-            const node& n = field.grid[i][j];
-            phase[i][j] = static_cast<float>(n.phase);
-            temp[i][j] = static_cast<float>(n.temp);
-            particle[i][j] = static_cast<float>(n.particleComp);
+            int nodeIdx = i * gridCols + j;
+            auto& nd = field.nodes;
+            
+            phase[i][j] = static_cast<float>(nd.phase[nodeIdx]);
+            temp[i][j] = static_cast<float>(nd.temp[nodeIdx]);
+            particle[i][j] = static_cast<float>(nd.particleComp[nodeIdx]);
             if (temp[i][j] > maxTemp) maxTemp = temp[i][j];
+            
             // derive dominant grain slot and orientation
             float bestVal = -1.0f;
             int bestSlot = -1;
-            for (int g = 0; g < n.grainsHere; ++g) {
-                if (n.grainPhases[g] > bestVal) {
-                    bestVal = static_cast<float>(n.grainPhases[g]);
+            for (int g = 0; g < nd.grainsHere[nodeIdx]; ++g) {
+                if (nd.grainPhases[nodeIdx][g] > bestVal) {
+                    bestVal = static_cast<float>(nd.grainPhases[nodeIdx][g]);
                     bestSlot = g;
                 }
             }
+            
             // Build IPF color using cubic symmetry and the triangle defined by [100],[110],[111]
             if (bestSlot >= 0) {
-                auto orient = n.orientations[bestSlot];
+                auto orient = nd.orientations[nodeIdx][bestSlot];
                 // convert angles from degrees to radians (stored as degrees in gridField::addGrain)
                 double phi1 = orient.theta1 * M_PI / 180.0;
                 double Phi  = orient.phi    * M_PI / 180.0;

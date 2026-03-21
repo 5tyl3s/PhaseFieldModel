@@ -78,7 +78,8 @@ void saveGridData(gridField &globalField) {
     }
     for (int i = 0; i < GRID_ROWS; i++) {
         for (int j = 0; j < GRID_COLS; j++) {
-            output_file1 << globalField.grid[i][j].temp;
+            int idx = i * GRID_COLS + j;
+            output_file1 << globalField.nodes.temp[idx];
             if (j < GRID_COLS - 1) output_file1 << ",";
         }
         output_file1 << "\n";
@@ -93,7 +94,8 @@ void saveGridData(gridField &globalField) {
     }
     for (int i = 0; i < GRID_ROWS; i++) {
         for (int j = 0; j < GRID_COLS; j++) {
-            output_file2 << globalField.grid[i][j].phase;
+            int idx = i * GRID_COLS + j;
+            output_file2 << globalField.nodes.phase[idx];
             if (j < GRID_COLS - 1) output_file2 << ",";
         }
         output_file2 << "\n";
@@ -108,12 +110,13 @@ void saveGridData(gridField &globalField) {
     }
     for (int i = 0; i < GRID_ROWS; i++) {
         for (int j = 0; j < GRID_COLS; j++) {
+            int idx = i * GRID_COLS + j;
             double tempOut = 0;
             int gNum = 0;
             for (int g = 0; g < 9; g++) {
-                if (globalField.grid[i][j].grainPhases[g] > tempOut) {
-                    tempOut = globalField.grid[i][j].grainPhases[g];
-                    gNum = globalField.grid[i][j].activeGrains[g] + 1;
+                if (globalField.nodes.grainPhases[idx][g] > tempOut) {
+                    tempOut = globalField.nodes.grainPhases[idx][g];
+                    gNum = globalField.nodes.activeGrains[idx][g] + 1;
                 }
             }
             output_file3 << gNum;
@@ -133,7 +136,8 @@ void saveGridData(gridField &globalField) {
     }
     for (int i = 0; i < GRID_ROWS; i++) {
         for (int j = 0; j < GRID_COLS; j++) {
-            output_file4 << globalField.grid[i][j].particleComp;
+            int idx = i * GRID_COLS + j;
+            output_file4 << globalField.nodes.particleComp[idx];
             if (j < GRID_COLS - 1) {
                 output_file4 << ',';
             }
@@ -151,14 +155,14 @@ void saveGridData(gridField &globalField) {
 
         for (int i = 0; i < GRID_ROWS; ++i) {
             for (int j = 0; j < GRID_COLS; ++j) {
-                node &nd = globalField.grid[i][j];
-                for (int s = 0; s < nd.grainsHere; ++s) {
-                    int gid = nd.activeGrains[s];
+                int idx = i * GRID_COLS + j;
+                for (int s = 0; s < globalField.nodes.grainsHere[idx]; ++s) {
+                    int gid = globalField.nodes.activeGrains[idx][s];
                     if (gid < 0 || gid >= nGrains) continue;
                     counts[gid]++;
                     if (!found[gid]) {
                         found[gid] = true;
-                        eulers[gid] = nd.orientations[s];
+                        eulers[gid] = globalField.nodes.orientations[idx][s];
                     }
                 }
             }

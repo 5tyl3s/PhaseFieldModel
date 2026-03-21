@@ -3,23 +3,19 @@
 #include "gridField.hpp"
 double underCool(double temp, double meltTemp);
 
-double calcGrainBoundaryEnergy(eulerAngles orient, std::vector<double> gradient);
+double calcGrainBoundaryEnergy(eulerAngles orient, const std::array<double,3>& gradient);
 
-double calcLocalFree(node nodeLoc, config mConfig);
+std::vector<std::vector<double>> calcFreeEnergy(gridField& field, config modelConfig);
 
-std::vector<std::vector<double>> calcFreeEnergy(gridField field,config modelConfig);
+std::array<float,9> calcGrainDiffEnergy(int nodeIdx, config mConfig);
 
-double compOtherGrains(int notIndex,node Node, int numGrains);
-
-std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig);
-
-double calcPhaseDiffEnergy(node* nd, config modelConfig);
+float calcPhaseDiffEnergy(int nodeIdx, config modelConfig);
 
 std::array<double,3> eulerRotate(eulerAngles orient, std::array<double,3> rotatedVector);
 
 double dotAngle(std::array<double,3> vec1, std::array<double,3> vec2);
-double calcParticleCompDiff(node* nd, config& modelConfig);
-double calcTemp(node* nd, config& modelConfig,int t);
+double calcParticleCompDiff(int nodeIdx, config& modelConfig);
+double calcTemp(int nodeIdx, config& modelConfig, int t);
 bool readCoeffs(const std::string &filename);
 
 

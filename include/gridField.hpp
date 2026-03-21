@@ -1,11 +1,12 @@
 #pragma once
 #include <array>
+#include <vector>
 #include "importConfig.hpp"
 
-// Define grid dimensions in one place. Change these values to the desired grid size.
-constexpr int GRID_ROWS = 400;
-constexpr int GRID_COLS = 400;
-constexpr int TOTAL_NODES = GRID_ROWS * GRID_COLS;
+// Grid dimensions - declared as extern so they can be set at runtime
+extern int GRID_ROWS;
+extern int GRID_COLS;
+extern int TOTAL_NODES;
 
 struct eulerAngles {
     double theta1;
@@ -13,60 +14,112 @@ struct eulerAngles {
     double theta2;
 };
 
-struct node {
-    int id;
-    double temp;
-    double phase;
-    double particleComp;
-    double exists;
-    double maxGrainPhase;  // Track the maximum grain phase at this node for thresholding
-    int sumGrains;
-    int grainsHere;
-    int heightPos;
-    int xPos;
-    int yPos;
-    bool hetNucleateHere;
-    bool homoNucleateHere;
-    bool nucleatedHere;
-    bool hasHetNucleated;  // Permanent flag: node has already undergone heterogeneous nucleation
-    bool hetNucleationSite;  // Permanent tracking flag: this node was a het nucleation site (visualize red)
-    bool homoNucleationSite;  // Permanent tracking flag: this node was a homo nucleation site (visualize pink)
-    std::array<int,9> addGrainsHere;
-    std::array<eulerAngles, 9> addGrainsOrientations;
-    int grainsToAdd;
-
-    std::array<eulerAngles, 9> orientations;
-    std::array<double, 9> grainPhases;
-    std::array<int, 9> activeGrains;
-
-    // Use 8 neighbors (Moore): left, right, up, down, up-left, up-right, down-left, down-right
-    std::array<node*, 8> neighbors;
-    float calcNucRate(config modelConf);
-    
+// Helper struct for neighbor indices
+struct neighborIndices {
+    int idx[8];  // left, right, up, down, up-left, up-right, down-left, down-right
 };
+
+// Structure of Arrays for node data - improved cache locality and vectorization
+// Uses dynamic allocation for scalability to multi-million node grids
+struct nodeArrays {
+    // Scalar fields - using float for temp/phase to save memory (50% reduction)
+    std::vector<int> id;
+    std::vector<float> temp;           // float instead of double (OK for thermal simulations)
+    std::vector<float> phase;          // float is sufficient for phase field [0,1]
+    std::vector<float> particleComp;
+    std::vector<uint8_t> exists;       // uint8_t instead of double (8x smaller)
+    std::vector<float> maxGrainPhase;
+    std::vector<uint8_t> sumGrains;    // uint8_t sufficient for sum of grain phases
+    std::vector<uint8_t> grainsHere;   // uint8_t sufficient (max 9 grains per node)
+    std::vector<int> heightPos;
+    std::vector<int> xPos;
+    std::vector<int> yPos;
+    
+    // Boolean flags - using uint8_t instead of bool (more cache efficient)
+    std::vector<uint8_t> hetNucleateHere;
+    std::vector<uint8_t> homoNucleateHere;
+    std::vector<uint8_t> nucleatedHere;
+    std::vector<uint8_t> hasHetNucleated;
+    std::vector<uint8_t> hetNucleationSite;
+    std::vector<uint8_t> homoNucleationSite;
+    
+    // Per-grain arrays (9 grains per node)
+    std::vector<std::array<int, 9>> addGrainsHere;         // int for grain IDs (can be -1 sentinel)
+    std::vector<std::array<eulerAngles, 9>> addGrainsOrientations;
+    std::vector<uint8_t> grainsToAdd;                          // uint8_t sufficient
+    std::vector<std::array<eulerAngles, 9>> orientations;
+    std::vector<std::array<float, 9>> grainPhases;             // float instead of double
+    std::vector<std::array<int, 9>> activeGrains;
+    
+    // Neighbor indices (Moore neighborhood: 8 neighbors)
+    std::vector<neighborIndices> neighbors;
+    
+    // Resize all vectors to match grid size
+    void resize(int totalNodes) {
+        id.resize(totalNodes);
+        temp.resize(totalNodes);
+        phase.resize(totalNodes);
+        particleComp.resize(totalNodes);
+        exists.resize(totalNodes);
+        maxGrainPhase.resize(totalNodes);
+        sumGrains.resize(totalNodes);
+        grainsHere.resize(totalNodes);
+        heightPos.resize(totalNodes);
+        xPos.resize(totalNodes);
+        yPos.resize(totalNodes);
+        hetNucleateHere.resize(totalNodes);
+        homoNucleateHere.resize(totalNodes);
+        nucleatedHere.resize(totalNodes);
+        hasHetNucleated.resize(totalNodes);
+        hetNucleationSite.resize(totalNodes);
+        homoNucleationSite.resize(totalNodes);
+        addGrainsHere.resize(totalNodes);
+        addGrainsOrientations.resize(totalNodes);
+        grainsToAdd.resize(totalNodes);
+        orientations.resize(totalNodes);
+        grainPhases.resize(totalNodes);
+        activeGrains.resize(totalNodes);
+        neighbors.resize(totalNodes);
+    }
+};
+
+// Helper function to calculate nucleation rate
+float calcNucRate(double temp, config modelConf);
 
 struct gridField {
     config mConfig;
-    std::array<std::array<node, GRID_COLS>, GRID_ROWS> grid;
-    std::array<node*, TOTAL_NODES> allNodes;
+    nodeArrays nodes;
     int numGrains;
-    node top;
-    node bottom;
+    
+    // Grid dimensions
+    int gridRows, gridCols, totalNodes;
+    
+    // Boundary node data
+    struct {
+        std::array<int, 9> activeGrains;
+        std::array<float, 9> grainPhases;  // float instead of double
+        float phase;                        // float instead of double
+        float particleComp;                 // float instead of double
+        uint8_t exists;
+        int id;
+    } top, bottom;
+    
     std::array<int,2> grainLocTemporary;
     long long diffEnergyTime;  // Store diff energy calculation time
     bool canNucleate;  // Flag to enable/disable nucleation when particles available
 
     void buildGrid();
-    void init(config modelConfig);
-    void addGrain(node* nucleus);
+    void init(config modelConfig, int rows = 500, int cols = 500);
+    void addGrain(int nodeIdx);
     void update(
-        std::array<double, TOTAL_NODES> &phaseDiffEn,
-        std::array<std::array<double,9>, TOTAL_NODES> &grainDiffEn,
-        std::array<double, TOTAL_NODES> &tempPartComp,
-        std::array<double, TOTAL_NODES> &tGrad,
+        std::vector<float> &phaseDiffEn,
+        std::vector<std::array<float, 9>> &grainDiffEn,
+        std::vector<float> &tempPartComp,
+        std::vector<float> &tGrad,
         bool enableProfiling = true
     );
-    void recordDiffEnergyTime(long long timeMs);};
+    void recordDiffEnergyTime(long long timeMs);
+};
 
 // Declare global variable (but don't allocate it here)
 extern gridField globalField;

@@ -57,6 +57,10 @@ struct config {
     double particleDensity; //kg/m^3
     double thickness2D; //um
     
+    // Grid dimensions
+    int gridRows;     // Number of rows in computational grid
+    int gridCols;     // Number of columns in computational grid
+    
     // Configuration flags
     bool enableVisualization;  // Enable/disable live visualization
     bool enableProfiling;      // Enable/disable performance profiling

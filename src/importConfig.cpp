@@ -179,6 +179,11 @@ config inputConfig(std::string configSource) {
     // Configuration flags
     newConfig.enableVisualization = readOr<bool>(j, "enableVisualization", true);
     newConfig.enableProfiling = readOr<bool>(j, "enableProfiling", true);
+    
+    // Grid dimensions
+    newConfig.gridRows = readOr<int>(j, "gridRows", 500);
+    newConfig.gridCols = readOr<int>(j, "gridCols", 500);
+    
     newConfig.particleDensity = 3150;
     newConfig.success = 1; // successful load
     return newConfig;
