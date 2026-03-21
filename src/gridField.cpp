@@ -238,7 +238,7 @@ void gridField::update(
     // THERMODYNAMIC particle update: dC/dt = mobility * laplacian(μ)
     // Particles flow DOWN the chemical potential gradient to minimize free energy
     // μ is computed in calcParticleCompDiff() and stored in tempPartComp array
-    const double particleMobilityLiquid = 4e-9;  // high mobility in liquid
+    const double particleMobilityLiquid = 4e-4;  // high mobility in liquid
     const double particleMobilitySolid = 1e-18;    // lower mo6bility in solid
     double dx = mConfig.dx;
     double denom = (dx * dx);
@@ -277,7 +277,7 @@ void gridField::update(
                 );
             }
 
-            muFlux = mNeigh * (mu_nb - mu) / pow(dx,4);
+            muFlux = mNeigh * (mu_nb - mu) / (mConfig.thickness2D * pow(dx,2));
             totFlow += muFlux;
         }
         // Choose mobility based on phase (liquid vs solid)
@@ -381,7 +381,7 @@ void gridField::update(
             grainExists = 0;
             if (n->grainsHere > 0 ) grainExists = 1;
             if (n->grainsToAdd > 0) grainExists = 1;
-            if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,3) * mConfig.dt * n->calcNucRate(mConfig) * -1)) && n->phase < 0.1) { 
+            if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,2)*mConfig.thickness2D * mConfig.dt * n->calcNucRate(mConfig) * -1)) && n->phase < 0.1) { 
                  n->homoNucleateHere = true;
              }
             if (!grainExists &&  n->temp < mConfig.meltTemp-(mConfig.hetNucUnderCooling)&& prob_dist(gen) < n->particleComp*mConfig.dt && !n->hasHetNucleated && n->phase < 0.1) { 
@@ -491,7 +491,7 @@ float node::calcNucRate(config modelConf) {
     
 
     // === 3D modification: use cell *volume*, not area ===
-    double cellVolume = pow(modelConf.dx,3);
+    double cellVolume = pow(modelConf.dx,2)*modelConf.thickness2D;
 
     // atomic number density (atoms / m^3)
     double atomicDensity = NA / modelConf.molarVolume;

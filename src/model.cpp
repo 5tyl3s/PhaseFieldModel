@@ -97,7 +97,8 @@ double calcGrainBoundaryEnergy(eulerAngles orient, const std::array<double,3>& g
     // 1) Build surface normal from gradient
     // If gradient is (dphi/dx, dphi/dy, dphi/dz), a reasonable normal is [-gx, -gy, 1] or [-gx, -gy, 0] depending on convention.
     // Here we assume the surface normal is approximately (-gx, -gy, 1) to include out-of-plane direction.
-    std::array<double,3> gradNormal = { -grad3[0], -grad3[1], -grad3[2] };
+    std::array<double,3> gradNormal = { -grad3[0], -grad3[1], 1.0 };
+
 
     // If gradient magnitude is tiny -> no well-defined normal (flat), return min
     double r = std::sqrt(gradNormal[0]*gradNormal[0] + gradNormal[1]*gradNormal[1] + gradNormal[2]*gradNormal[2]);
@@ -385,9 +386,9 @@ std::array<double,9> calcGrainDiffEnergy(node* nd, config mConfig) {
      // f_particle = 2*c*pha^2*E_solid + 2*c*(1-pha)^2*E_liquid
      // ∂f/∂c = 2*pha^2*E_solid + 2*(1-pha)^2*E_liquid
      double sizeScale = 0.6*4*3.14149 * pow(modelConfig.particleRadius,2)/((4/3)*3.14159*pow(modelConfig.particleRadius,3)); // surface area / volume
-     double muLocal = 2 *c  *pha * pow(modelConfig.dx,3) * modelConfig.particleSolidIntEnergy*sizeScale
-                    +2 *c * (1.0 - pha) * pow(modelConfig.dx,3)*modelConfig.particleLiquidIntEnergy*sizeScale
-                    + 7*(pow(modelConfig.dx,2)*(std::sin(2*3.14159 * (c*cellPackedVolume) / Vp)))
+     double muLocal = 2 *c  *pha * pow(modelConfig.dx,2)*modelConfig.thickness2D * modelConfig.particleSolidIntEnergy*sizeScale
+                    +2 *c * (1.0 - pha) * pow(modelConfig.dx,2)*modelConfig.thickness2D*modelConfig.particleLiquidIntEnergy*sizeScale
+                    + 1*(pow(modelConfig.dx,2)*modelConfig.thickness2D*(std::sin(2*3.14159 * (c*cellPackedVolume) / Vp)))
         ;
     double muGrav = 9.81 * (modelConfig.particleDensity-modelConfig.density) *pow(modelConfig.dx,4) *nd->yPos;
 

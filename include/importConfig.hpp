@@ -55,6 +55,7 @@ struct config {
     double particleDiameter; //m
     double hetNucUnderCooling;
     double particleDensity; //kg/m^3
+    double thickness2D; //um
     
     // Configuration flags
     bool enableVisualization;  // Enable/disable live visualization

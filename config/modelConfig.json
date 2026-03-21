@@ -31,8 +31,9 @@
   },
 
   "dx_um": 0.5,
+  "thickness2D_um": 1,
   "dt_s": 0.00000001,
-  "startTempK": 2894,
+  "startTempK": 2892,
   "meltTemp": 2896,
 
   "HeatCapacityJKgK": 251,
@@ -42,7 +43,7 @@
   "cellWidthum": 50,
 
   "particleVolumeFraction": 0.02,
-  "particleDiameter_um": 0.3,
+  "particleDiameter_um": 0.35,
 
   "LiqSolIntEnergyJm2": 2.92,
   "LiqSolIntWidthum": 1,
@@ -65,7 +66,7 @@
   "drivingForceSlopek": -0.0212,
   "drivingForceIntercept": 61.3952,
 
-  "particleSolidIntEnergy": 32.3,
+  "particleSolidIntEnergy": 3.3,
   "particleLiqIntEnergy": 3.0,
 
   "enableVisualization": true,

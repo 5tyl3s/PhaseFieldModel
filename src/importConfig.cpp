@@ -63,8 +63,7 @@ config inputConfig(std::string configSource) {
         configOut << "    \"particleLiqIntEnergy\": \"Particle interaction energy in liquid (model units).\"\n";
         configOut << "  },\n";
         configOut << "  \"dx_um\": 1,\n";
-        configOut << "  \"dt_s\": 1e-12,\n";
-        configOut << "  \"startTempK\": 2896,\n";
+        configOut << "  \"thickness2D_um\": 1,\n";
         configOut << "  \"meltTemp\": 2896,\n";
         configOut << "  \"HeatCapacityJKgK\": 251,\n";
         configOut << "  \"Densitykgm3\": 10280,\n";
@@ -121,7 +120,7 @@ config inputConfig(std::string configSource) {
 
     newConfig.liqSolIntE = readOr<double>(j, "LiqSolIntEnergyJm2", 3.0);
     newConfig.liqSolIntWidth = readOr<double>(j, "LiqSolIntWidthum", 1.0) * 1e-6;
-
+    newConfig.thickness2D = readOr<double>(j, "thickness2D_um", 1.0) * 1e-6;
     newConfig.grainIntE = readOr<double>(j, "GrainIntEnergyJm2", 3.0);
     newConfig.grainIntWidth = readOr<double>(j, "GrainIntWidthum", 1.0) * 1e-6;
 
