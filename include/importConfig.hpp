@@ -56,6 +56,8 @@ struct config {
     double hetNucUnderCooling;
     double particleDensity; //kg/m^3
     double thickness2D; //um
+
+    bool radialCooling;                 // Enable radial cooling with colder outside
     
     // Grid dimensions
     int gridRows;     // Number of rows in computational grid

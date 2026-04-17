@@ -19,7 +19,7 @@
     "BasePlateTempK": "Base plate temperature (K) used for boundary/initial conditions.",
     "diffusionActivationEnergy": "Activation energy for diffusion (units as used in nucleation formula).",
     "TimeSteps": "Number of timesteps to run the simulation.",
-    "CoolingRatempers": "Cooling rate (K per second).",
+    "CoolingRatempers": "Cooling front speed (m/s).",
     "tempGradKperm": "Vertical temperature gradient (K per meter).",
     "MinimumTempK": "Minimum allowed temperature (K).",
     "molarMass": "Molar mass of material (g/mol).",
@@ -30,10 +30,12 @@
     "Note": "Removed keys: solidConductivityWMK, HomogeneousNucleationCoefficient, UndercoolingRequirement. Those are handled via defaults in code if needed."
   },
 
-  "dx_um": 0.5,
-  "thickness2D_um": 1,
+  "dx_um": 1.0,
+  "thickness2D_um": 0.5,
   "dt_s": 0.00000001,
   "startTempK": 2891,
+  "radialCooling": true,
+
   "meltTemp": 2896,
 
   "HeatCapacityJKgK": 251,
@@ -42,8 +44,8 @@
   "cellHeightum": 50,
   "cellWidthum": 50,
 
-  "particleVolumeFraction": 0.02,
-  "particleDiameter_um": 0.35,
+  "particleVolumeFraction": 0.05,
+  "particleDiameter_um": 0.05,
 
   "LiqSolIntEnergyJm2": 2.92,
   "LiqSolIntWidthum": 1,
@@ -66,11 +68,11 @@
   "drivingForceSlopek": -0.0212,
   "drivingForceIntercept": 61.3952,
 
-  "particleSolidIntEnergy": 3.3,
+  "particleSolidIntEnergy": 15.3,
   "particleLiqIntEnergy": 3.0,
 
-  "gridRows": 200,
-  "gridCols": 1000,
+  "gridRows": 500,
+  "gridCols": 500,
 
   "enableVisualization": true,
   "enableProfiling": true

@@ -11,11 +11,16 @@ std::array<float,9> calcGrainDiffEnergy(int nodeIdx, config mConfig);
 
 float calcPhaseDiffEnergy(int nodeIdx, config modelConfig);
 
+double calcParticleCompDiff(int nodeIdx, config& modelConfig);
+
+double calcTemp(int nodeIdx, config& modelConfig, int t);
+
+void resetEnergyProfilingStats();
+void printEnergyProfilingStats();
+
 std::array<double,3> eulerRotate(eulerAngles orient, std::array<double,3> rotatedVector);
 
 double dotAngle(std::array<double,3> vec1, std::array<double,3> vec2);
-double calcParticleCompDiff(int nodeIdx, config& modelConfig);
-double calcTemp(int nodeIdx, config& modelConfig, int t);
 bool readCoeffs(const std::string &filename);
 
 

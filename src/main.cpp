@@ -77,6 +77,10 @@ int main() {
     std::error_code ec;
     std::filesystem::create_directories(framesDir, ec);
 
+    if (configData.enableProfiling) {
+        resetEnergyProfilingStats();
+    }
+
     int frameCounter = 0;
     int saveEvery = visualizer.getUpdateInterval();
     bool simulationComplete = false;
@@ -275,6 +279,9 @@ int main() {
     }
 
     std::cout << "Elapsed(ms)=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start1).count() << std::endl;
+    if (configData.enableProfiling) {
+        printEnergyProfilingStats();
+    }
     return 0;
 }
 

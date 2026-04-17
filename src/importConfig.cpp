@@ -53,8 +53,9 @@ config inputConfig(std::string configSource) {
         configOut << "    \"BasePlateTempK\": \"Base plate temperature (K) used for boundary/initial conditions.\",\n";
         configOut << "    \"diffusionActivationEnergy\": \"Activation energy for diffusion (units as used in nucleation formula).\",\n";
         configOut << "    \"TimeSteps\": \"Number of timesteps to run the simulation.\",\n";
-        configOut << "    \"CoolingRatempers\": \"Cooling rate (K per second).\",\n";
+        configOut << "    \"CoolingRatempers\": \"Cooling front speed (m/s).\",\n";
         configOut << "    \"tempGradKperm\": \"Vertical temperature gradient (K per meter).\",\n";
+        configOut << "    \"radialCooling\": \"Enable radial cooling with colder outside.\",\n";
         configOut << "    \"MinimumTempK\": \"Minimum allowed temperature (K).\",\n";
         configOut << "    \"molarMass\": \"Molar mass of material (g/mol).\",\n";
         configOut << "    \"drivingForceSlopek\": \"Slope used in driving force calculation.\",\n";
@@ -79,9 +80,10 @@ config inputConfig(std::string configSource) {
         configOut << "  \"BasePlateTempK\": 500.0,\n";
         configOut << "  \"diffusionActivationEnergy\": 1.5,\n";
         configOut << "  \"TimeSteps\": 1000,\n";
-        configOut << "  \"CoolingRatempers\": 3e11,\n";
+        configOut << "  \"CoolingRatempers\": 0.001,\n";
         configOut << "  \"MinimumTempK\": 100,\n";
         configOut << "  \"tempGradKperm\": 20000,\n";
+        configOut << "  \"radialCooling\": false,\n";
         configOut << "  \"molarMass\": 95.95,\n";
         configOut << "  \"drivingForceSlopek\": 13.8,\n";
         configOut << "  \"drivingForceIntercept\": 39842,\n";
@@ -162,6 +164,8 @@ config inputConfig(std::string configSource) {
     newConfig.particleSolidIntEnergy = readOr<double>(j, "particleSolidIntEnergy", 2.0);
     newConfig.particleLiquidIntEnergy = readOr<double>(j, "particleLiqIntEnergy", 1.0);
     newConfig.particleDiameter = readOr<double>(j, "particleDiameter_um", 1.0) * 1e-6;
+
+    newConfig.radialCooling = readOr<bool>(j, "radialCooling", false);
 
     std::cout << "Particle Radius set to: " << newConfig.particleRadius << " m" << std::endl;
     // Discretization steps

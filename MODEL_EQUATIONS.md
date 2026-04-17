@@ -16,7 +16,7 @@ where:
 - $y$ = vertical position (lattice coordinates)
 - $G_t$ = temperature gradient (K/m)
 - $\Delta x$ = grid spacing (m)
-- $C_{\text{rate}}$ = cooling rate (K/s)
+- $C_{\text{rate}}$ = cooling front speed (m/s)
 - $\Delta t$ = timestep (s)
 - $t$ = current timestep number
 
@@ -318,7 +318,7 @@ At the end of timestep, pending grains are activated and grain boundary energy i
 | Melt temperature | $T_m$ | 2896 | K | |
 | Starting temperature | $T_{\text{start}}$ | 2891 | K | |
 | Minimum temperature | $T_{\text{min}}$ | 100 | K | |
-| Cooling rate | $C_{\text{rate}}$ | 0.3 | K/s | |
+| Cooling front speed | $C_{\text{rate}}$ | 0.001 | m/s | |
 | Temperature gradient | $G_t$ | 100000 | K/m | |
 | Specific heat capacity | $c_p$ | 251 | J/(kg·K) | |
 | Density | $\rho$ | 10280 | kg/m³ | |

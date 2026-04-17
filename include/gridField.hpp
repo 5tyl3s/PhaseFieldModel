@@ -25,6 +25,9 @@ struct nodeArrays {
     // Scalar fields - using float for temp/phase to save memory (50% reduction)
     std::vector<int> id;
     std::vector<float> temp;           // float instead of double (OK for thermal simulations)
+    std::vector<float> baseTemp;       // cached base temperature for each node
+    std::vector<float> distFromCenter;  // distance from center for radial cooling
+    std::vector<float> maxDist;         // maximum distance from center
     std::vector<float> phase;          // float is sufficient for phase field [0,1]
     std::vector<float> particleComp;
     std::vector<uint8_t> exists;       // uint8_t instead of double (8x smaller)
@@ -34,6 +37,7 @@ struct nodeArrays {
     std::vector<int> heightPos;
     std::vector<int> xPos;
     std::vector<int> yPos;
+    std::vector<float> tempDistance;
     
     // Boolean flags - using uint8_t instead of bool (more cache efficient)
     std::vector<uint8_t> hetNucleateHere;
@@ -58,6 +62,9 @@ struct nodeArrays {
     void resize(int totalNodes) {
         id.resize(totalNodes);
         temp.resize(totalNodes);
+        baseTemp.resize(totalNodes);
+        distFromCenter.resize(totalNodes);
+        maxDist.resize(totalNodes);
         phase.resize(totalNodes);
         particleComp.resize(totalNodes);
         exists.resize(totalNodes);
@@ -67,6 +74,7 @@ struct nodeArrays {
         heightPos.resize(totalNodes);
         xPos.resize(totalNodes);
         yPos.resize(totalNodes);
+        tempDistance.resize(totalNodes);
         hetNucleateHere.resize(totalNodes);
         homoNucleateHere.resize(totalNodes);
         nucleatedHere.resize(totalNodes);

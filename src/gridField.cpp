@@ -123,8 +123,10 @@ void gridField::init(config modelConfig, int rows, int cols) {
         nodes.activeGrains[idx] = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
         nodes.id[idx] = idx;
         nodes.heightPos[idx] = i;
-        nodes.temp[idx] = 0.0;
-        nodes.temp[idx] = modelConfig.startTemp + (i * modelConfig.tGrad * modelConfig.dx);
+        nodes.distFromCenter[idx] = 0.0f; // not used
+        nodes.maxDist[idx] = 0.0f; // not used
+        nodes.baseTemp[idx] = static_cast<float>(modelConfig.startTemp + (i * modelConfig.tGrad * modelConfig.dx));
+        nodes.temp[idx] = nodes.baseTemp[idx];
         nodes.grainsToAdd[idx] = 0;
         nodes.hetNucleateHere[idx] = false;
         nodes.homoNucleateHere[idx] = false;
@@ -137,17 +139,22 @@ void gridField::init(config modelConfig, int rows, int cols) {
         nodes.homoNucleationSite[idx] = false;
         nodes.maxGrainPhase[idx] = 0.0;
         nodes.particleComp[idx] = 0.0;
+        if (modelConfig.radialCooling) {
+            nodes.tempDistance[idx] = (std::sqrt(std::pow(gridRows/2,2)+std::pow(gridCols/2,2))-1*std::sqrt(std::pow(i - gridRows/2, 2) + std::pow(j - gridCols/2, 2)) )* modelConfig.dx; // distance from center for radial cooling
+        } else {
+            nodes.tempDistance[idx] = i * modelConfig.dx; // vertical distance for planar cooling
+        }
     }
     
     // Initialize particles
     double particleVolume = (4.0/3.0) * 3.14159 * std::pow(modelConfig.particleRadius, 3);
-    int numParts = static_cast<int>(std::round(gridRows * gridCols * modelConfig.particleVolFraction*modelConfig.dx*modelConfig.dx*modelConfig.dx/particleVolume));
+    int numParts = static_cast<int>(std::round(gridRows * gridCols * modelConfig.particleVolFraction*modelConfig.dx*modelConfig.dx*modelConfig.thickness2D/particleVolume));
     std::cout << "Initializing with " << numParts << " particles.\n";
     for (int particle = 0; particle < numParts; particle++) {
         int x = rng() % gridCols;
         int y = rng() % gridRows;
         int idx = y * gridCols + x;
-        nodes.particleComp[idx] += particleVolume/(modelConfig.dx*modelConfig.dx*modelConfig.dx);
+        nodes.particleComp[idx] += particleVolume/(modelConfig.dx*modelConfig.dx*modelConfig.thickness2D);
     }
 }
 
@@ -204,12 +211,12 @@ void gridField::update(
     // First pass: update phase and grain phases
     #pragma omp parallel for
     for (int idx = 0; idx < totalNodes; idx++) {
-        nodes.phase[idx] = nodes.phase[idx] - (mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[idx]*1e-14;
+        nodes.phase[idx] = nodes.phase[idx] - (mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[idx]*4e-14;
         double grainHereCount = 0.0;
         float maxGrainPhase = 0.0f;
 
         for (int g = 0; g < nodes.grainsHere[idx]; g++) {
-            nodes.grainPhases[idx][g] = nodes.grainPhases[idx][g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[idx][g]*1e-14);
+            nodes.grainPhases[idx][g] = nodes.grainPhases[idx][g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[idx][g]*2e-14);
             if (nodes.grainPhases[idx][g] < 0.0) nodes.grainPhases[idx][g] = 0.0;
             if (nodes.grainPhases[idx][g] > 1.0) nodes.grainPhases[idx][g] = 1.0;
             grainHereCount = grainHereCount + pow(nodes.grainPhases[idx][g],2);
@@ -221,7 +228,7 @@ void gridField::update(
 
     auto t1_start = std::chrono::steady_clock::now();
 
-    const double particleMobilityLiquid = 4e-4;
+    const double particleMobilityLiquid = 2e-3;
     const double particleMobilitySolid = 1e-18;
     double dx = mConfig.dx;
     double denom = (dx * dx);

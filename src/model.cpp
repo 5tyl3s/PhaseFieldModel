@@ -4,12 +4,33 @@
 #include <cmath>
 #include <algorithm>
 #include <omp.h>
+#include <chrono>
+#include <atomic>
 
 #include <vector>
 std::vector<double> SH_coeffs; // Spherical harmonic coefficients
 int Lmax = 8;                   // Maximum degree (match MATLAB)
 #include <fstream>
 #include <string>
+
+struct EnergyProfiler {
+    std::atomic<long long> phaseThermoNs{0};
+    std::atomic<long long> phaseLaplacianNs{0};
+    std::atomic<long long> phaseTotalNs{0};
+    std::atomic<long long> phaseCalls{0};
+
+    std::atomic<long long> grainNeighborNs{0};
+    std::atomic<long long> grainCountNs{0};
+    std::atomic<long long> grainGradientNs{0};
+    std::atomic<long long> grainGbEnergyNs{0};
+    std::atomic<long long> grainEnergyNs{0};
+    std::atomic<long long> grainTotalNs{0};
+    std::atomic<long long> grainCalls{0};
+
+    std::atomic<long long> particleMuNs{0};
+    std::atomic<long long> particleTotalNs{0};
+    std::atomic<long long> particleCalls{0};
+} energyProfiler;
 
 auto safeClamp = [](double v, double low, double high){
     if (std::isnan(v) || std::isinf(v)) return (low+high)/2.0;
@@ -68,6 +89,52 @@ double Y_lm_real(int l, int m, double theta, double phi) {
 
 double underCool(double temp, double meltTemp) {
     return 0.5*(1-(tanh(1000000*((temp/meltTemp)-1))));
+}
+
+void resetEnergyProfilingStats() {
+    energyProfiler.phaseThermoNs = 0;
+    energyProfiler.phaseLaplacianNs = 0;
+    energyProfiler.phaseTotalNs = 0;
+    energyProfiler.phaseCalls = 0;
+    energyProfiler.grainNeighborNs = 0;
+    energyProfiler.grainCountNs = 0;
+    energyProfiler.grainGradientNs = 0;
+    energyProfiler.grainGbEnergyNs = 0;
+    energyProfiler.grainEnergyNs = 0;
+    energyProfiler.grainTotalNs = 0;
+    energyProfiler.grainCalls = 0;
+    energyProfiler.particleMuNs = 0;
+    energyProfiler.particleTotalNs = 0;
+    energyProfiler.particleCalls = 0;
+}
+
+void printEnergyProfilingStats() {
+    auto printMs = [](long long ns) {
+        return static_cast<double>(ns) * 1e-6;
+    };
+
+    std::cout << "\n=== Energy Profiling Results ===" << std::endl;
+    if (energyProfiler.phaseCalls > 0) {
+        std::cout << "Phase differential calls: " << energyProfiler.phaseCalls << std::endl;
+        std::cout << "  Thermodynamic energy time: " << printMs(energyProfiler.phaseThermoNs.load()) << " ms" << std::endl;
+        std::cout << "  Laplacian time: " << printMs(energyProfiler.phaseLaplacianNs.load()) << " ms" << std::endl;
+        std::cout << "  Total phase diff time: " << printMs(energyProfiler.phaseTotalNs.load()) << " ms" << std::endl;
+    }
+    if (energyProfiler.grainCalls > 0) {
+        std::cout << "Grain differential calls: " << energyProfiler.grainCalls << std::endl;
+        std::cout << "  Neighbor gather time: " << printMs(energyProfiler.grainNeighborNs.load()) << " ms" << std::endl;
+        std::cout << "  Grain count/laplacian time: " << printMs(energyProfiler.grainCountNs.load()) << " ms" << std::endl;
+        std::cout << "  Gradient + GB energy time: " << printMs(energyProfiler.grainGradientNs.load()) << " ms" << std::endl;
+        std::cout << "  GB energy call time: " << printMs(energyProfiler.grainGbEnergyNs.load()) << " ms" << std::endl;
+        std::cout << "  Grain energy time: " << printMs(energyProfiler.grainEnergyNs.load()) << " ms" << std::endl;
+        std::cout << "  Total grain diff time: " << printMs(energyProfiler.grainTotalNs.load()) << " ms" << std::endl;
+    }
+    if (energyProfiler.particleCalls > 0) {
+        std::cout << "Particle comp diff calls: " << energyProfiler.particleCalls << std::endl;
+        std::cout << "  μ calculation time: " << printMs(energyProfiler.particleMuNs.load()) << " ms" << std::endl;
+        std::cout << "  Total particle diff time: " << printMs(energyProfiler.particleTotalNs.load()) << " ms" << std::endl;
+    }
+    std::cout << "=== End Energy Profiling Results ===\n" << std::endl;
 }
 
 double calcGrainBoundaryEnergy(eulerAngles orient, const std::array<double,3>& grad3) {
@@ -164,19 +231,23 @@ double dotAngle(std::array<double,3> vec1, std::array<double,3> vec2) {
 
 float calcPhaseDiffEnergy(int nodeIdx, config mConfig) {
     auto& nd = globalField.nodes;
+    energyProfiler.phaseCalls++;
+    auto totalStart = std::chrono::steady_clock::now();
+
+    auto thermoStart = std::chrono::steady_clock::now();
     double pha = nd.phase[nodeIdx];
     double part = nd.particleComp[nodeIdx];
     double uc = underCool(nd.temp[nodeIdx], mConfig.meltTemp);
     double driveToLiq = (0.0349*nd.temp[nodeIdx] - 101.0704)/mConfig.molarVolume;
     double driveToSol = (-0.0212 *nd.temp[nodeIdx] + 61.3952)/mConfig.molarVolume;
     double eLoc = (-2 + 2*pha) * uc * driveToSol  + (2 * pha * (1 - uc)*driveToLiq );
-    
     eLoc = eLoc + mConfig.phaseCoefficient*(((2* pha-2) * pow(nd.maxGrainPhase[nodeIdx],2)));
-    
     double sizeScale = 0.66*4*3.14149 * pow(mConfig.particleRadius,2)/((4/3)*3.14159*pow(mConfig.particleRadius,3));
     eLoc = eLoc +  (pow(part,2)*mConfig.particleSolidIntEnergy*sizeScale) - (pow(part,2)*mConfig.particleLiquidIntEnergy*sizeScale);
-    
-    // 4-point Laplacian
+    auto thermoEnd = std::chrono::steady_clock::now();
+    energyProfiler.phaseThermoNs += std::chrono::duration_cast<std::chrono::nanoseconds>(thermoEnd - thermoStart).count();
+
+    auto lapStart = std::chrono::steady_clock::now();
     double sumPh = 0.0;
     double nCount = 0;
     for (int nb = 0; nb < 4; nb++) {
@@ -194,14 +265,21 @@ float calcPhaseDiffEnergy(int nodeIdx, config mConfig) {
     }
     lapPh = -1*lapPh* (1/(mConfig.dx*mConfig.dx));
     double eGrad = lapPh * 0.5*mConfig.phaseGradCo;
+    auto lapEnd = std::chrono::steady_clock::now();
+    energyProfiler.phaseLaplacianNs += std::chrono::duration_cast<std::chrono::nanoseconds>(lapEnd - lapStart).count();
+
     double diffFree = eLoc + eGrad;
     diffFree = safeClamp(diffFree, -1e22, 1e22);
+    auto totalEnd = std::chrono::steady_clock::now();
+    energyProfiler.phaseTotalNs += std::chrono::duration_cast<std::chrono::nanoseconds>(totalEnd - totalStart).count();
     return (float)diffFree;
 }
 
 std::array<float,9> calcGrainDiffEnergy(int nodeIdx, config mConfig) {
     auto& nd = globalField.nodes;
     std::array<float,9> diffFree;
+    energyProfiler.grainCalls++;
+    auto totalStart = std::chrono::steady_clock::now();
     double sumOtherGrainsSquared = nd.sumGrains[nodeIdx];
 
     for (int g = 0; g < 9; g++) {
@@ -213,124 +291,117 @@ std::array<float,9> calcGrainDiffEnergy(int nodeIdx, config mConfig) {
             continue;
         }
 
-        // Gather neighbor grain phases for same active grain
+        auto neighborStart = std::chrono::steady_clock::now();
         double grainLeft = 0.0, grainRight = 0.0, grainUp = 0.0, grainDown = 0.0;
         double grainUpLeft = 0.0, grainUpRight = 0.0, grainDownLeft = 0.0, grainDownRight = 0.0;
-        
         for(int gg = 0; gg < 9; gg++) {
             int nbrIdx;
-            
-            // Left neighbor
             nbrIdx = nd.neighbors[nodeIdx].idx[0];
-            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg]) 
+            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg])
                 grainLeft = nd.grainPhases[nbrIdx][gg];
-            
-            // Right neighbor
             nbrIdx = nd.neighbors[nodeIdx].idx[1];
-            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg]) 
+            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg])
                 grainRight = nd.grainPhases[nbrIdx][gg];
-            
-            // Up neighbor
             nbrIdx = nd.neighbors[nodeIdx].idx[2];
-            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg]) 
+            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg])
                 grainUp = nd.grainPhases[nbrIdx][gg];
-            
-            // Down neighbor
             nbrIdx = nd.neighbors[nodeIdx].idx[3];
-            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg]) 
+            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg])
                 grainDown = nd.grainPhases[nbrIdx][gg];
-            
-            // Up-left
             nbrIdx = nd.neighbors[nodeIdx].idx[4];
-            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg]) 
+            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg])
                 grainUpLeft = nd.grainPhases[nbrIdx][gg];
-            
-            // Up-right
             nbrIdx = nd.neighbors[nodeIdx].idx[5];
-            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg]) 
+            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg])
                 grainUpRight = nd.grainPhases[nbrIdx][gg];
-            
-            // Down-left
             nbrIdx = nd.neighbors[nodeIdx].idx[6];
-            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg]) 
+            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg])
                 grainDownLeft = nd.grainPhases[nbrIdx][gg];
-            
-            // Down-right
             nbrIdx = nd.neighbors[nodeIdx].idx[7];
-            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg]) 
+            if(nbrIdx < TOTAL_NODES && activeGrain == nd.activeGrains[nbrIdx][gg])
                 grainDownRight = nd.grainPhases[nbrIdx][gg];
         }
+        auto neighborEnd = std::chrono::steady_clock::now();
+        energyProfiler.grainNeighborNs += std::chrono::duration_cast<std::chrono::nanoseconds>(neighborEnd - neighborStart).count();
 
+        auto countStart = std::chrono::steady_clock::now();
         double sumGr = grainLeft + grainRight + grainUp + grainDown + 0.7071*(grainUpLeft + grainUpRight + grainDownLeft + grainDownRight);
         double nCount = 0;
         for(int nb = 0; nb < 4; nb++) {
             int nbrIdx = nd.neighbors[nodeIdx].idx[nb];
             if(nbrIdx < TOTAL_NODES && nd.exists[nbrIdx] != 0) nCount++;
-        } 
+        }
         for(int nb = 4; nb < 8; nb++) {
             int nbrIdx = nd.neighbors[nodeIdx].idx[nb];
-            if(nbrIdx < TOTAL_NODES && nd.exists[nbrIdx] != 0) nCount+= 0.7071;
-        } 
-        
+            if(nbrIdx < TOTAL_NODES && nd.exists[nbrIdx] != 0) nCount += 0.7071;
+        }
         double lapGr = 0.0;
         if(nCount > 0) {
             lapGr = sumGr - nCount * gra;
         }
-        double grainGrad = -1*lapGr *mConfig.grainGradCo / (mConfig.dx * mConfig.dx);
+        double grainGrad = -1*lapGr * mConfig.grainGradCo / (mConfig.dx * mConfig.dx);
+        auto countEnd = std::chrono::steady_clock::now();
+        energyProfiler.grainCountNs += std::chrono::duration_cast<std::chrono::nanoseconds>(countEnd - countStart).count();
 
+        auto gradientStart = std::chrono::steady_clock::now();
         double gx = 0.0, gy = 0.0, gz = 0.0;
         double inv2dx = 0.5 / mConfig.dx;
-
         gx = (grainRight - grainLeft) * inv2dx * 1.0 +
-        0.5 * ( (grainUpRight - grainUpLeft) + (grainDownRight - grainDownLeft) ) * inv2dx;
-
+             0.5 * ( (grainUpRight - grainUpLeft) + (grainDownRight - grainDownLeft) ) * inv2dx;
         gy = (grainDown - grainUp) * inv2dx * 1.0 +
-        0.5 * ( (grainDownRight - grainUpRight) + (grainDownLeft  - grainUpLeft) ) * inv2dx;
- 
+             0.5 * ( (grainDownRight - grainUpRight) + (grainDownLeft  - grainUpLeft) ) * inv2dx;
         std::array<double,3> localGrad3 = { gx, gy, gz };
+        auto gbStart = std::chrono::steady_clock::now();
         double gbEnergy = calcGrainBoundaryEnergy(nd.orientations[nodeIdx][g], localGrad3);
-
+        auto gbEnd = std::chrono::steady_clock::now();
+        energyProfiler.grainGbEnergyNs += std::chrono::duration_cast<std::chrono::nanoseconds>(gbEnd - gbStart).count();
         if (gbEnergy < 2.92) {
             gbEnergy = 2.92;
         }
-        grainGrad = 0.5 *grainGrad * gbEnergy;
-        
+        grainGrad = 0.5 * grainGrad * gbEnergy;
+        auto gradientEnd = std::chrono::steady_clock::now();
+        energyProfiler.grainGradientNs += std::chrono::duration_cast<std::chrono::nanoseconds>(gradientEnd - gradientStart).count();
+
+        auto energyStart = std::chrono::steady_clock::now();
         double comp = sumOtherGrainsSquared - (gra*gra);
-        double notUC = 1.0 - underCool(nd.temp[nodeIdx], mConfig.meltTemp);
         double grainEnergy = mConfig.grainPreCo*(15*(pow(gra,3)-gra)*underCool(nd.temp[nodeIdx], mConfig.meltTemp) + (500*gra*comp*mConfig.grainIntWidth));
         grainGrad = safeClamp(grainGrad, -1e12, 1e12);
         grainEnergy = safeClamp(grainEnergy, -1e12, 1e12);
         diffFree[g] = grainGrad + grainEnergy;
+        auto energyEnd = std::chrono::steady_clock::now();
+        energyProfiler.grainEnergyNs += std::chrono::duration_cast<std::chrono::nanoseconds>(energyEnd - energyStart).count();
     }
 
+    auto totalEnd = std::chrono::steady_clock::now();
+    energyProfiler.grainTotalNs += std::chrono::duration_cast<std::chrono::nanoseconds>(totalEnd - totalStart).count();
     return diffFree;
 }
 
 double calcTemp(int nodeIdx, config& modelConfig, int t) {
     auto& nd = globalField.nodes;
-    return modelConfig.startTemp + ((nd.heightPos[nodeIdx])*modelConfig.tGrad*modelConfig.dx) - modelConfig.tGrad*modelConfig.coolingRate* (modelConfig.dt*t);
+    return modelConfig.startTemp + ((nd.tempDistance[nodeIdx]*modelConfig.tGrad) - modelConfig.tGrad*modelConfig.coolingRate* (modelConfig.dt*t));
 }
 
 double calcParticleCompDiff(int nodeIdx, config& modelConfig) {
-    // Compute CHEMICAL POTENTIAL (μ) which drives particle motion
     auto& nd = globalField.nodes;
+    energyProfiler.particleCalls++;
+    auto totalStart = std::chrono::steady_clock::now();
+
+    auto muStart = std::chrono::steady_clock::now();
     double c = nd.particleComp[nodeIdx];
     double pha = nd.phase[nodeIdx];
-    
     const double Vp = (4.0/3.0) * 3.14159 * std::pow(modelConfig.particleRadius, 3);
-    const double cellPackedVolume = modelConfig.dx*modelConfig.dx*modelConfig.dx;
-
+    const double cellPackedVolume = modelConfig.dx*modelConfig.dx*modelConfig.thickness2D;
     double sizeScale = 0.6*4*3.14149 * pow(modelConfig.particleRadius,2)/((4/3)*3.14159*pow(modelConfig.particleRadius,3));
     double muLocal = 2 *c  *pha * pow(modelConfig.dx,2)*modelConfig.thickness2D * modelConfig.particleSolidIntEnergy*sizeScale
                    +2 *c * (1.0 - pha) * pow(modelConfig.dx,2)*modelConfig.thickness2D*modelConfig.particleLiquidIntEnergy*sizeScale
-                   + 1*(pow(modelConfig.dx,2)*modelConfig.thickness2D*(std::sin(2*3.14159 * (c*cellPackedVolume) / Vp)));
-    
+                   + 2e7*(pow(modelConfig.dx,2)*modelConfig.thickness2D*(std::sin(2*3.14159 * (c*cellPackedVolume) / Vp)));
     double muGrav = 9.81 * (modelConfig.particleDensity-modelConfig.density) *pow(modelConfig.dx,4) *nd.yPos[nodeIdx];
-
     if (c > 1) muLocal  = muLocal+ 5e-17*std::pow(10*(c-1),2);
     if (c < 0) muLocal = muLocal-5e-17*std::pow(10*(c),2);
-     
     double mu = muLocal + muGrav;
+    auto muEnd = std::chrono::steady_clock::now();
+    energyProfiler.particleMuNs += std::chrono::duration_cast<std::chrono::nanoseconds>(muEnd - muStart).count();
 
     if (!std::isfinite(mu) || std::isnan(mu)) {
         std::cerr << "[WARN] calcParticleCompDiff: non-finite mu at node id=" << nd.id[nodeIdx]
@@ -339,6 +410,8 @@ double calcParticleCompDiff(int nodeIdx, config& modelConfig) {
     }
 
     mu = safeClamp(mu, -1e12, 1e12);
+    auto totalEnd = std::chrono::steady_clock::now();
+    energyProfiler.particleTotalNs += std::chrono::duration_cast<std::chrono::nanoseconds>(totalEnd - totalStart).count();
     return mu;
 }
 
