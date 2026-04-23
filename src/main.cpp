@@ -3,10 +3,14 @@
 #include "modelStartup.hpp"
 #include "importConfig.hpp"
 #include "gridField.hpp"
-#include "glVisualization.hpp"   // <- add: declare GLVisualizer
+#if ENABLE_VISUALIZATION
+#include "glVisualization.hpp"   // <- declare GLVisualizer
 #include "helperFunctions.hpp"    // helper functions like saveBMP
-#include <GL/glew.h>             // <- add: for glReadPixels / GL types
-#include <GLFW/glfw3.h>          // <- add: for glfwGetFramebufferSize / context
+#include <GL/glew.h>             // <- for glReadPixels / GL types
+#include <GLFW/glfw3.h>          // <- for glfwGetFramebufferSize / context
+#else
+#include "helperFunctions.hpp"    // helper functions
+#endif
 #include <omp.h>
 #include <direct.h> // For _getcwd on Windows
 
@@ -59,6 +63,7 @@ int main() {
     std::cout << "Starting Time Steps..." << std::endl << std::flush;
 
     // create visualizer before the simulation so it updates live
+#if ENABLE_VISUALIZATION
     GLVisualizer visualizer(globalField.gridRows, globalField.gridCols, 150);
     bool haveViz = false;
     if (configData.enableVisualization) {
@@ -71,6 +76,10 @@ int main() {
     } else {
         std::cout << "Visualization disabled in config.\n";
     }
+#else
+    bool haveViz = false;
+    std::cout << "Visualization disabled at compile time.\n";
+#endif
 
     // prepare frames output dir
     std::filesystem::path framesDir = std::filesystem::current_path() / "viz_frames";
@@ -82,7 +91,11 @@ int main() {
     }
 
     int frameCounter = 0;
+#if ENABLE_VISUALIZATION
     int saveEvery = visualizer.getUpdateInterval();
+#else
+    int saveEvery = configData.timeSteps; // Never save frames if visualization disabled
+#endif
     bool simulationComplete = false;
 
     // Performance profiling
@@ -142,6 +155,7 @@ int main() {
         }
 
         // update visualizer and save a frame periodically
+#if ENABLE_VISUALIZATION
         if (haveViz && (t % saveEvery == 0)) {
             auto vizStart = std::chrono::steady_clock::now();
             
@@ -187,6 +201,7 @@ int main() {
             std::cout << "Visualizer window closed by user, stopping simulation\n";
             break;
         }
+#endif
 
         // Measure and average timestep performance
         if (configData.enableProfiling) {
@@ -222,6 +237,7 @@ int main() {
     }
 
     // If simulation completed naturally or by solidification check, pause visualizer on last frame
+#if ENABLE_VISUALIZATION
     if (simulationComplete && haveViz) {
         std::cout << "Simulation complete. Displaying final frame in visualizer window.\n";
         std::cout << "Close the window to finish and save output files.\n";
@@ -234,6 +250,11 @@ int main() {
             std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 FPS
         }
     }
+#else
+    if (simulationComplete) {
+        std::cout << "Simulation complete.\n";
+    }
+#endif
 
     // Save all grid data to files
     saveGridData(globalField);

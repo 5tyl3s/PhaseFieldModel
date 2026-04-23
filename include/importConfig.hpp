@@ -58,6 +58,7 @@ struct config {
     double thickness2D; //um
 
     bool radialCooling;                 // Enable radial cooling with colder outside
+    bool hemisphericalCooling;          // Enable hemispherical temperature distribution hot at the top center
     
     // Grid dimensions
     int gridRows;     // Number of rows in computational grid

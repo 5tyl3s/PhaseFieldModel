@@ -125,8 +125,6 @@ void gridField::init(config modelConfig, int rows, int cols) {
         nodes.heightPos[idx] = i;
         nodes.distFromCenter[idx] = 0.0f; // not used
         nodes.maxDist[idx] = 0.0f; // not used
-        nodes.baseTemp[idx] = static_cast<float>(modelConfig.startTemp + (i * modelConfig.tGrad * modelConfig.dx));
-        nodes.temp[idx] = nodes.baseTemp[idx];
         nodes.grainsToAdd[idx] = 0;
         nodes.hetNucleateHere[idx] = false;
         nodes.homoNucleateHere[idx] = false;
@@ -139,11 +137,18 @@ void gridField::init(config modelConfig, int rows, int cols) {
         nodes.homoNucleationSite[idx] = false;
         nodes.maxGrainPhase[idx] = 0.0;
         nodes.particleComp[idx] = 0.0;
-        if (modelConfig.radialCooling) {
+        if (modelConfig.hemisphericalCooling) {
+            float centerCol = (gridCols - 1) / 2.0f;
+            float maxRadius = std::sqrt((gridRows - 1)*(gridRows - 1) + centerCol*centerCol);
+            float dist = std::sqrt(((gridRows - 1 - i) * (gridRows - 1 - i)) + ((j - centerCol) * (j - centerCol)));
+            nodes.tempDistance[idx] = (dist < maxRadius) ? ((maxRadius - dist) * modelConfig.dx) : 0.0f;
+        } else if (modelConfig.radialCooling) {
             nodes.tempDistance[idx] = (std::sqrt(std::pow(gridRows/2,2)+std::pow(gridCols/2,2))-1*std::sqrt(std::pow(i - gridRows/2, 2) + std::pow(j - gridCols/2, 2)) )* modelConfig.dx; // distance from center for radial cooling
         } else {
-            nodes.tempDistance[idx] = i * modelConfig.dx; // vertical distance for planar cooling
+            nodes.tempDistance[idx] = ((gridRows - 1 - i) * modelConfig.dx); // vertical distance from top for planar cooling
         }
+        nodes.baseTemp[idx] = static_cast<float>(modelConfig.startTemp + (nodes.tempDistance[idx] * modelConfig.tGrad));
+        nodes.temp[idx] = nodes.baseTemp[idx];
     }
     
     // Initialize particles
@@ -211,7 +216,7 @@ void gridField::update(
     // First pass: update phase and grain phases
     #pragma omp parallel for
     for (int idx = 0; idx < totalNodes; idx++) {
-        nodes.phase[idx] = nodes.phase[idx] - (mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[idx]*4e-14;
+        nodes.phase[idx] = nodes.phase[idx] - pow((1-nodes.particleComp[idx]),3)*(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[idx]*4e-14;
         double grainHereCount = 0.0;
         float maxGrainPhase = 0.0f;
 
@@ -222,6 +227,25 @@ void gridField::update(
             grainHereCount = grainHereCount + pow(nodes.grainPhases[idx][g],2);
             maxGrainPhase = std::max(maxGrainPhase, nodes.grainPhases[idx][g]);
         }
+
+        // Remove non-existing grain entries: any grain slot with zero phase or invalid id
+        int writeIdx = 0;
+        for (int readIdx = 0; readIdx < nodes.grainsHere[idx]; readIdx++) {
+            bool isAlive = (nodes.grainPhases[idx][readIdx] > 0.0f) && (nodes.activeGrains[idx][readIdx] >= 0);
+            if (isAlive) {
+                if (writeIdx != readIdx) {
+                    nodes.activeGrains[idx][writeIdx] = nodes.activeGrains[idx][readIdx];
+                    nodes.grainPhases[idx][writeIdx] = nodes.grainPhases[idx][readIdx];
+                    nodes.orientations[idx][writeIdx] = nodes.orientations[idx][readIdx];
+                }
+                writeIdx++;
+            }
+        }
+        for (int clearIdx = writeIdx; clearIdx < 9; clearIdx++) {
+            nodes.activeGrains[idx][clearIdx] = -1;
+            nodes.grainPhases[idx][clearIdx] = 0.0f;
+        }
+        nodes.grainsHere[idx] = writeIdx;
         nodes.sumGrains[idx] = grainHereCount;
         nodes.maxGrainPhase[idx] = maxGrainPhase;
     }
