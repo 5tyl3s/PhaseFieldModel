@@ -57,6 +57,10 @@ config inputConfig(std::string configSource) {
         configOut << "    \"tempGradKperm\": \"Vertical temperature gradient (K per meter).\",\n";
         configOut << "    \"radialCooling\": \"Enable radial cooling with colder outside.\",\n";
         configOut << "    \"hemisphericalCooling\": \"Enable hemispherical temperature distribution hot at the top center.\",\n";
+        configOut << "    \"periodicLeft\": \"Enable periodic boundary conditions on left edge.\",\n";
+        configOut << "    \"periodicRight\": \"Enable periodic boundary conditions on right edge.\",\n";
+        configOut << "    \"periodicTop\": \"Enable periodic boundary conditions on top edge.\",\n";
+        configOut << "    \"periodicBottom\": \"Enable periodic boundary conditions on bottom edge.\",\n";
         configOut << "    \"MinimumTempK\": \"Minimum allowed temperature (K).\",\n";
         configOut << "    \"molarMass\": \"Molar mass of material (g/mol).\",\n";
         configOut << "    \"drivingForceSlopek\": \"Slope used in driving force calculation.\",\n";
@@ -86,6 +90,10 @@ config inputConfig(std::string configSource) {
         configOut << "  \"tempGradKperm\": 20000,\n";
         configOut << "  \"radialCooling\": false,\n";
         configOut << "  \"hemisphericalCooling\": false,\n";
+        configOut << "  \"periodicLeft\": true,\n";
+        configOut << "  \"periodicRight\": true,\n";
+        configOut << "  \"periodicTop\": false,\n";
+        configOut << "  \"periodicBottom\": false,\n";
         configOut << "  \"molarMass\": 95.95,\n";
         configOut << "  \"drivingForceSlopek\": 13.8,\n";
         configOut << "  \"drivingForceIntercept\": 39842,\n";
@@ -169,6 +177,12 @@ config inputConfig(std::string configSource) {
 
     newConfig.radialCooling = readOr<bool>(j, "radialCooling", false);
     newConfig.hemisphericalCooling = readOr<bool>(j, "hemisphericalCooling", false);
+
+    // Periodic boundary conditions
+    newConfig.periodicLeft = readOr<bool>(j, "periodicLeft", true);
+    newConfig.periodicRight = readOr<bool>(j, "periodicRight", true);
+    newConfig.periodicTop = readOr<bool>(j, "periodicTop", false);
+    newConfig.periodicBottom = readOr<bool>(j, "periodicBottom", false);
 
     std::cout << "Particle Radius set to: " << newConfig.particleRadius << " m" << std::endl;
     // Discretization steps

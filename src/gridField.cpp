@@ -17,50 +17,89 @@ void gridField::buildGrid() {
     auto setNeighbors = [this](int i, int j, int nodeIdx) {
         neighborIndices& nb = nodes.neighbors[nodeIdx];
         
-        // left, right, up, down, up-left, up-right, down-left, down-right
         // left
-        int left_j = (j > 0) ? j - 1 : gridCols - 1;
-        nb.idx[0] = i * gridCols + left_j;
+        if (mConfig.periodicLeft) {
+            int left_j = (j > 0) ? j - 1 : gridCols - 1;
+            nb.idx[0] = i * gridCols + left_j;
+        } else {
+            if (j > 0) {
+                nb.idx[0] = i * gridCols + (j - 1);
+            } else {
+                nb.idx[0] = totalNodes; // boundary marker
+            }
+        }
         
         // right
-        int right_j = (j < gridCols - 1) ? j + 1 : 0;
-        nb.idx[1] = i * gridCols + right_j;
+        if (mConfig.periodicRight) {
+            int right_j = (j < gridCols - 1) ? j + 1 : 0;
+            nb.idx[1] = i * gridCols + right_j;
+        } else {
+            if (j < gridCols - 1) {
+                nb.idx[1] = i * gridCols + (j + 1);
+            } else {
+                nb.idx[1] = totalNodes; // boundary marker
+            }
+        }
         
-        // up
-        int up_i = (i > 0) ? i - 1 : gridRows - 1;  // wrapped for top row
-        // Special case: top boundary marker (use totalNodes to indicate boundary)
-        if (i == 0) nb.idx[2] = totalNodes;
-        else nb.idx[2] = up_i * gridCols + j;
+        // up (top)
+        if (mConfig.periodicTop) {
+            int up_i = (i > 0) ? i - 1 : gridRows - 1;
+            nb.idx[2] = up_i * gridCols + j;
+        } else {
+            if (i > 0) {
+                nb.idx[2] = (i - 1) * gridCols + j;
+            } else {
+                nb.idx[2] = totalNodes; // boundary marker
+            }
+        }
         
-        // down
-        int down_i = (i < gridRows - 1) ? i + 1 : gridRows - 1;  // wrapped for bottom
-        // Special case: bottom boundary marker
-        if (i == gridRows - 1) nb.idx[3] = totalNodes + 1;
-        else nb.idx[3] = down_i * gridCols + j;
+        // down (bottom)
+        if (mConfig.periodicBottom) {
+            int down_i = (i < gridRows - 1) ? i + 1 : 0;
+            nb.idx[3] = down_i * gridCols + j;
+        } else {
+            if (i < gridRows - 1) {
+                nb.idx[3] = (i + 1) * gridCols + j;
+            } else {
+                nb.idx[3] = totalNodes + 1; // boundary marker
+            }
+        }
         
         // up-left
-        int ul_i = (i > 0) ? i - 1 : gridRows - 1;
-        int ul_j = (j > 0) ? j - 1 : gridCols - 1;
-        if (i == 0) nb.idx[4] = totalNodes;
-        else nb.idx[4] = ul_i * gridCols + ul_j;
+        int ul_i = (i > 0) ? i - 1 : (mConfig.periodicTop ? gridRows - 1 : gridRows - 1);
+        int ul_j = (j > 0) ? j - 1 : (mConfig.periodicLeft ? gridCols - 1 : gridCols - 1);
+        if ((i == 0 && !mConfig.periodicTop) || (j == 0 && !mConfig.periodicLeft)) {
+            nb.idx[4] = totalNodes;
+        } else {
+            nb.idx[4] = ul_i * gridCols + ul_j;
+        }
         
         // up-right
-        int ur_i = (i > 0) ? i - 1 : gridRows - 1;
-        int ur_j = (j < gridCols - 1) ? j + 1 : 0;
-        if (i == 0) nb.idx[5] = totalNodes;
-        else nb.idx[5] = ur_i * gridCols + ur_j;
+        int ur_i = (i > 0) ? i - 1 : (mConfig.periodicTop ? gridRows - 1 : gridRows - 1);
+        int ur_j = (j < gridCols - 1) ? j + 1 : (mConfig.periodicRight ? 0 : 0);
+        if ((i == 0 && !mConfig.periodicTop) || (j == gridCols - 1 && !mConfig.periodicRight)) {
+            nb.idx[5] = totalNodes;
+        } else {
+            nb.idx[5] = ur_i * gridCols + ur_j;
+        }
         
         // down-left
-        int dl_i = (i < gridRows - 1) ? i + 1 : gridRows - 1;
-        int dl_j = (j > 0) ? j - 1 : gridCols - 1;
-        if (i == gridRows - 1) nb.idx[6] = totalNodes + 1;
-        else nb.idx[6] = dl_i * gridCols + dl_j;
+        int dl_i = (i < gridRows - 1) ? i + 1 : (mConfig.periodicBottom ? 0 : gridRows - 1);
+        int dl_j = (j > 0) ? j - 1 : (mConfig.periodicLeft ? gridCols - 1 : gridCols - 1);
+        if ((i == gridRows - 1 && !mConfig.periodicBottom) || (j == 0 && !mConfig.periodicLeft)) {
+            nb.idx[6] = totalNodes + 1;
+        } else {
+            nb.idx[6] = dl_i * gridCols + dl_j;
+        }
         
         // down-right
-        int dr_i = (i < gridRows - 1) ? i + 1 : gridRows - 1;
-        int dr_j = (j < gridCols - 1) ? j + 1 : 0;
-        if (i == gridRows - 1) nb.idx[7] = totalNodes + 1;
-        else nb.idx[7] = dr_i * gridCols + dr_j;
+        int dr_i = (i < gridRows - 1) ? i + 1 : (mConfig.periodicBottom ? 0 : gridRows - 1);
+        int dr_j = (j < gridCols - 1) ? j + 1 : (mConfig.periodicRight ? 0 : 0);
+        if ((i == gridRows - 1 && !mConfig.periodicBottom) || (j == gridCols - 1 && !mConfig.periodicRight)) {
+            nb.idx[7] = totalNodes + 1;
+        } else {
+            nb.idx[7] = dr_i * gridCols + dr_j;
+        }
     };
 
     // Build all neighbor relationships

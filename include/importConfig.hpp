@@ -60,6 +60,12 @@ struct config {
     bool radialCooling;                 // Enable radial cooling with colder outside
     bool hemisphericalCooling;          // Enable hemispherical temperature distribution hot at the top center
     
+    // Periodic boundary conditions (independent control for each side)
+    bool periodicLeft;                  // Enable periodic boundary on left edge
+    bool periodicRight;                 // Enable periodic boundary on right edge  
+    bool periodicTop;                   // Enable periodic boundary on top edge
+    bool periodicBottom;                // Enable periodic boundary on bottom edge
+    
     // Grid dimensions
     int gridRows;     // Number of rows in computational grid
     int gridCols;     // Number of columns in computational grid

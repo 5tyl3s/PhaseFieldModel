@@ -22,6 +22,10 @@
     "CoolingRatempers": "Cooling front speed (m/s).",
     "tempGradKperm": "Vertical temperature gradient (K per meter).",
     "MinimumTempK": "Minimum allowed temperature (K).",
+    "periodicLeft": "Enable periodic boundary conditions on left edge.",
+    "periodicRight": "Enable periodic boundary conditions on right edge.",
+    "periodicTop": "Enable periodic boundary conditions on top edge.",
+    "periodicBottom": "Enable periodic boundary conditions on bottom edge.",
     "molarMass": "Molar mass of material (g/mol).",
     "drivingForceSlopek": "Slope used in driving force calculation.",
     "drivingForceIntercept": "Intercept used in driving force calculation.",
@@ -36,6 +40,10 @@
   "startTempK": 2891,
   "radialCooling": false,
   "hemisphericalCooling": true,
+  "periodicLeft": false,
+  "periodicRight": false,
+  "periodicTop": false,
+  "periodicBottom": false,
 
   "meltTemp": 2896,
 
