@@ -12,9 +12,7 @@
 #include "helperFunctions.hpp"    // helper functions
 #endif
 #include <omp.h>
-#ifdef _WIN32
 #include <direct.h> // For _getcwd on Windows
-#endif
 
 #include <fstream>
 #include <vector>
@@ -131,7 +129,7 @@ int main() {
             bool allHaveGrains = true;
             for (int idx = 0; idx < globalField.totalNodes && allSolidified; ++idx) {
                 // Check if solidified (phase >= 1.0)
-                if (globalField.nodes.phase[idx] < 0.9999) {
+                if (globalField.nodes.phase[idx] < 0.9) {
                     allSolidified = false;
                 }
                 // Check if has a grain
@@ -139,11 +137,7 @@ int main() {
                     allHaveGrains = false;
                 }
             }
-            if (allSolidified && allHaveGrains) {
-                std::cout << "Fully solidified with grains at timestep " << t << ", ending simulation\n";
-                simulationComplete = true;
-                break;
-            }
+
 
             if (allHaveGrains && allGrainsFoundStep < 0) {
                 allGrainsFoundStep = t;
