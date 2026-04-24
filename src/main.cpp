@@ -12,7 +12,9 @@
 #include "helperFunctions.hpp"    // helper functions
 #endif
 #include <omp.h>
+#ifdef _WIN32
 #include <direct.h> // For _getcwd on Windows
+#endif
 
 #include <fstream>
 #include <vector>
