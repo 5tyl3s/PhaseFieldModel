@@ -73,6 +73,7 @@ struct config {
     // Configuration flags
     bool enableVisualization;  // Enable/disable live visualization
     bool enableProfiling;      // Enable/disable performance profiling
+    double simulationTimeLimit; // Maximum wall-clock runtime in seconds (0 = disabled)
 
 };
 

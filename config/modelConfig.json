@@ -26,6 +26,7 @@
     "periodicRight": "Enable periodic boundary conditions on right edge.",
     "periodicTop": "Enable periodic boundary conditions on top edge.",
     "periodicBottom": "Enable periodic boundary conditions on bottom edge.",
+    "simulationTimeLimit_s": "Maximum wall-clock runtime in seconds (0 = disabled).",
     "molarMass": "Molar mass of material (g/mol).",
     "drivingForceSlopek": "Slope used in driving force calculation.",
     "drivingForceIntercept": "Intercept used in driving force calculation.",
@@ -44,6 +45,7 @@
   "periodicRight": false,
   "periodicTop": false,
   "periodicBottom": false,
+  "simulationTimeLimit_s": 0.0,
 
   "meltTemp": 2896,
 

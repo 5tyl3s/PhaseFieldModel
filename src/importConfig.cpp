@@ -61,6 +61,7 @@ config inputConfig(std::string configSource) {
         configOut << "    \"periodicRight\": \"Enable periodic boundary conditions on right edge.\",\n";
         configOut << "    \"periodicTop\": \"Enable periodic boundary conditions on top edge.\",\n";
         configOut << "    \"periodicBottom\": \"Enable periodic boundary conditions on bottom edge.\",\n";
+        configOut << "    \"simulationTimeLimit_s\": \"Maximum wall-clock runtime in seconds (0 = disabled).\",\n";
         configOut << "    \"MinimumTempK\": \"Minimum allowed temperature (K).\",\n";
         configOut << "    \"molarMass\": \"Molar mass of material (g/mol).\",\n";
         configOut << "    \"drivingForceSlopek\": \"Slope used in driving force calculation.\",\n";
@@ -94,6 +95,7 @@ config inputConfig(std::string configSource) {
         configOut << "  \"periodicRight\": true,\n";
         configOut << "  \"periodicTop\": false,\n";
         configOut << "  \"periodicBottom\": false,\n";
+        configOut << "  \"simulationTimeLimit_s\": 0.0,\n";
         configOut << "  \"molarMass\": 95.95,\n";
         configOut << "  \"drivingForceSlopek\": 13.8,\n";
         configOut << "  \"drivingForceIntercept\": 39842,\n";
@@ -200,6 +202,7 @@ config inputConfig(std::string configSource) {
     // Configuration flags
     newConfig.enableVisualization = readOr<bool>(j, "enableVisualization", true);
     newConfig.enableProfiling = readOr<bool>(j, "enableProfiling", true);
+    newConfig.simulationTimeLimit = readOr<double>(j, "simulationTimeLimit_s", 0.0);
     
     // Grid dimensions
     newConfig.gridRows = readOr<int>(j, "gridRows", 500);

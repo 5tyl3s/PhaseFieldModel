@@ -97,6 +97,8 @@ int main() {
     int saveEvery = configData.timeSteps; // Never save frames if visualization disabled
 #endif
     bool simulationComplete = false;
+    int allGrainsFoundStep = -1;
+    const int allGrainsExtraDelay = 10000;
 
     // Performance profiling
     long long totalStepTime = 0;
@@ -110,6 +112,15 @@ int main() {
         auto stepStart = std::chrono::steady_clock::now();
         
         if (t%50 == 0) std::cout << t << "/" << configData.timeSteps << std::endl;
+
+        if (configData.simulationTimeLimit > 0.0) {
+            double elapsedSeconds = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - start1).count();
+            if (elapsedSeconds >= configData.simulationTimeLimit) {
+                std::cout << "Simulation time limit reached (" << elapsedSeconds << " s). Stopping simulation.\n";
+                simulationComplete = true;
+                break;
+            }
+        }
         
         // Check every 1000 timesteps if fully solidified with all grains present
         auto solidCheckStart = std::chrono::steady_clock::now();
@@ -131,7 +142,19 @@ int main() {
                 simulationComplete = true;
                 break;
             }
+
+            if (allHaveGrains && allGrainsFoundStep < 0) {
+                allGrainsFoundStep = t;
+                std::cout << "All nodes have at least one grain at timestep " << t << ". Ending after " << allGrainsExtraDelay << " additional timesteps.\n";
+            }
         }
+
+        if (allGrainsFoundStep >= 0 && (t - allGrainsFoundStep) >= allGrainsExtraDelay) {
+            std::cout << "All nodes had grains for " << allGrainsExtraDelay << " timesteps, ending simulation at timestep " << t << ".\n";
+            simulationComplete = true;
+            break;
+        }
+
         auto solidCheckEnd = std::chrono::steady_clock::now();
         if (configData.enableProfiling) {
             totalSolidCheckTime += std::chrono::duration_cast<std::chrono::microseconds>(solidCheckEnd - solidCheckStart).count();
