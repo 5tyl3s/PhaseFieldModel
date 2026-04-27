@@ -10,6 +10,11 @@
 #include <vector>
 std::vector<double> SH_coeffs; // Spherical harmonic coefficients
 int Lmax = 8;                   // Maximum degree (match MATLAB)
+
+constexpr int SH_LUT_THETA_SIZE = 3600;
+constexpr int SH_LUT_PHI_SIZE   = 3600;
+std::vector<float> SH_energyLUT;
+
 #include <fstream>
 #include <string>
 
@@ -37,7 +42,11 @@ auto safeClamp = [](double v, double low, double high){
     return std::max(low, std::min(high, v));
 };
 
-bool readCoeffs(const std::string& filename) {
+double factorial(int n);
+double P_lm(int l, int m, double x);
+double Y_lm_real(int l, int m, double theta, double phi);
+
+bool readCoeffs(const std::string&filename) {
     std::ifstream file(filename);
     std::cout << "Reading Spherical Harmonic Coefficients from: " << filename << std::endl;
     if(!file.is_open()) return false;
@@ -48,6 +57,37 @@ bool readCoeffs(const std::string& filename) {
     while(file >> val) SH_coeffs.push_back(val);
     std::cout << "Loaded " << SH_coeffs.size() << " Coefficients." << std::endl;
     file.close();
+
+    int expected_count = (Lmax + 1) * (Lmax + 1);
+    if ((int)SH_coeffs.size() < expected_count) {
+        std::cerr << "SH_coeffs size " << SH_coeffs.size() << " < expected " << expected_count << std::endl;
+        return false;
+    }
+
+    SH_energyLUT.clear();
+    SH_energyLUT.resize(SH_LUT_THETA_SIZE * SH_LUT_PHI_SIZE);
+    const double PI = 3.141592653589793;
+    const double dTheta = PI / SH_LUT_THETA_SIZE;
+    const double dPhi = 2.0 * PI / SH_LUT_PHI_SIZE;
+
+    for (int ti = 0; ti < SH_LUT_THETA_SIZE; ++ti) {
+        double theta = dTheta * (ti + 0.5);
+        for (int pi = 0; pi < SH_LUT_PHI_SIZE; ++pi) {
+            double phi = dPhi * pi;
+            double energy = 0.0;
+            int idx = 0;
+            for (int l = 0; l <= Lmax; ++l) {
+                for (int m = -l; m <= l; ++m) {
+                    energy += SH_coeffs[idx++] * Y_lm_real(l, m, theta, phi);
+                }
+            }
+            if (!std::isfinite(energy)) energy = 2.9297;
+            energy = std::max(2.9297, std::min(8.0, energy));
+            SH_energyLUT[pi + ti * SH_LUT_PHI_SIZE] = static_cast<float>(energy);
+        }
+    }
+
+    std::cout << "Built spherical harmonic energy lookup table (" << SH_LUT_THETA_SIZE << "x" << SH_LUT_PHI_SIZE << ")." << std::endl;
     return true;
 }
 
@@ -163,27 +203,22 @@ double calcGrainBoundaryEnergy(eulerAngles orient, const std::array<double,3>& g
     double phi = std::atan2(y, x);
     if (!std::isfinite(theta) || !std::isfinite(phi)) return MIN_GB;
 
-    int expected_count = (Lmax + 1) * (Lmax + 1);
-    if ((int)SH_coeffs.size() < expected_count) {
-        std::cerr << "SH_coeffs size " << SH_coeffs.size() << " < expected " << expected_count << std::endl;
+    if (SH_energyLUT.empty()) {
+        std::cerr << "SH energy lookup table is empty. Please call readCoeffs() before running the simulation." << std::endl;
         return MIN_GB;
     }
 
-    double energy = 0.0;
-    int idx = 0;
-    for (int l = 0; l <= Lmax; ++l) {
-        for (int m = -l; m <= l; ++m) {
-            if (idx >= (int)SH_coeffs.size()) { return MIN_GB; }
-            energy += SH_coeffs[idx++] * Y_lm_real(l, m, theta, phi);
-        }
-    }
+    if (phi < 0.0) phi += 2.0 * PI;
+    int thetaIndex = static_cast<int>((theta / PI) * (SH_LUT_THETA_SIZE - 1) + 0.5);
+    int phiIndex = static_cast<int>((phi / (2.0 * PI)) * SH_LUT_PHI_SIZE);
 
-    if (!std::isfinite(energy)) return MIN_GB;
+    if (thetaIndex < 0) thetaIndex = 0;
+    if (thetaIndex >= SH_LUT_THETA_SIZE) thetaIndex = SH_LUT_THETA_SIZE - 1;
+    if (phiIndex < 0) phiIndex = 0;
+    if (phiIndex >= SH_LUT_PHI_SIZE) phiIndex = SH_LUT_PHI_SIZE - 1;
 
-    if (energy < MIN_GB) energy = MIN_GB;
-    if (energy > MAX_GB) energy = MAX_GB;
-
-    return energy;
+    float energy = SH_energyLUT[phiIndex + thetaIndex * SH_LUT_PHI_SIZE];
+    return static_cast<double>(energy);
 }
 
 std::array<double,3> eulerRotate(eulerAngles orient, std::array<double,3> rotatedVector) {

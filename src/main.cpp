@@ -127,7 +127,7 @@ int main() {
         if (t > 0 && (t % 2000 == 0)) {
             bool allSolidified = true;
             bool allHaveGrains = true;
-            for (int idx = 0; idx < globalField.totalNodes && allSolidified; ++idx) {
+            for (int idx = 0; idx < globalField.totalNodes; ++idx) {
                 // Check if solidified (phase >= 1.0)
                 if (globalField.nodes.phase[idx] < 0.9) {
                     allSolidified = false;

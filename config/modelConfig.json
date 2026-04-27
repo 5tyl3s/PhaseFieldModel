@@ -38,7 +38,7 @@
   "dx_um": 1.0,
   "thickness2D_um": 0.5,
   "dt_s": 0.00000001,
-  "startTempK": 2894,
+  "startTempK": 2890,
   "radialCooling": false,
   "hemisphericalCooling": true,
   "periodicLeft": false,
@@ -71,7 +71,7 @@
   "diffusionActivationEnergy": 1.5,
   "TimeSteps": 100000000,
 
-  "CoolingRatempers": 0.3,
+  "CoolingRatempers": 0.6,
   "MinimumTempK": 100,
   "tempGradKperm": 100000.0,
 
