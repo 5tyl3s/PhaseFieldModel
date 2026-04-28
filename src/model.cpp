@@ -416,7 +416,6 @@ std::array<float,9> calcGrainDiffEnergy(int nodeIdx, config mConfig) {
 
 double calcTemp(int nodeIdx, config& modelConfig, int t) {
     auto& nd = globalField.nodes;
-    if (nd.isDeactivated[nodeIdx]) return nd.temp[nodeIdx]; // or some default
     return modelConfig.startTemp + ((nd.tempDistance[nodeIdx]*modelConfig.tGrad) - modelConfig.tGrad*modelConfig.coolingRate* (modelConfig.dt*t));
 }
 
