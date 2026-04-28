@@ -157,6 +157,8 @@ void gridField::init(config modelConfig, int rows, int cols) {
         
         nodes.phase[idx] = 0.0;
         nodes.exists[idx] = 1;
+        nodes.isDeactivated[idx] = 1;
+        nodes.isParticleActive[idx] = 1;
         nodes.grainsHere[idx] = 0;
         nodes.grainPhases[idx] = {0,0,0,0,0,0,0,0,0};
         nodes.activeGrains[idx] = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
@@ -252,9 +254,24 @@ void gridField::update(
     static long long totalPropagateGrainTime = 0;
     static int profileCount = 0;
 
+    // Update temperature for all nodes
+    #pragma omp parallel for
+    for (int idx = 0; idx < totalNodes; idx++) {
+        nodes.temp[idx] = tGrad[idx];
+    }
+
+    // Activate nodes when temperature drops below melt temp
+    #pragma omp parallel for
+    for (int idx = 0; idx < totalNodes; idx++) {
+        if (nodes.temp[idx] < mConfig.meltTemp && nodes.isDeactivated[idx]) {
+            nodes.isDeactivated[idx] = 0;
+        }
+    }
+
     // First pass: update phase and grain phases
     #pragma omp parallel for
     for (int idx = 0; idx < totalNodes; idx++) {
+        if (nodes.isDeactivated[idx]) continue;
         nodes.phase[idx] = nodes.phase[idx] - pow((1-nodes.particleComp[idx]),3)*(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[idx]*4e-14;
         double grainHereCount = 0.0;
         float maxGrainPhase = 0.0f;
@@ -289,6 +306,22 @@ void gridField::update(
         nodes.maxGrainPhase[idx] = maxGrainPhase;
     }
 
+    // Deactivate particle updates for solidified nodes
+    #pragma omp parallel for
+    for (int idx = 0; idx < totalNodes; idx++) {
+        if (nodes.phase[idx] > 0.95) {
+            nodes.isParticleActive[idx] = 0;
+        }
+    }
+
+    // Deactivate nodes that are fully solidified with grains
+    #pragma omp parallel for
+    for (int idx = 0; idx < totalNodes; idx++) {
+        if (nodes.phase[idx] > 0.95 && nodes.grainsHere[idx] > 0) {
+            nodes.isDeactivated[idx] = 1;
+        }
+    }
+
     auto t1_start = std::chrono::steady_clock::now();
 
     const double particleMobilityLiquid = 2e-3;
@@ -301,6 +334,7 @@ void gridField::update(
     // Particle composition update
     #pragma omp parallel for
     for (int ptr = 0; ptr < totalNodes; ptr++) {
+        if (!nodes.isParticleActive[ptr]) continue;
         double mu = tempPartComp[ptr];
         double sumNeighMu = 0.0;
         int nExist = 0;
@@ -337,6 +371,7 @@ void gridField::update(
     // Apply particle composition changes
     #pragma omp parallel for
     for (int ptr = 0; ptr < totalNodes; ptr++) {
+        if (!nodes.isParticleActive[ptr]) continue;
         nodes.particleComp[ptr] = nodes.particleComp[ptr] + particleCompChange[ptr];
     }
 
@@ -350,6 +385,7 @@ void gridField::update(
     // Second pass: propagate grains and nucleation
     #pragma omp parallel for
     for (int ptr = 0; ptr < totalNodes; ptr++) {
+        if (nodes.isDeactivated[ptr]) continue;
         if (nodes.phase[ptr] > 1.0) nodes.phase[ptr] = 1.0;
         if (nodes.phase[ptr] < 0.0) nodes.phase[ptr] = 0.0;
         
@@ -401,11 +437,11 @@ void gridField::update(
             }
         }
         
-        nodes.temp[ptr] = tGrad[ptr];
     }
     
     // Add new grains from neighbors and handle nucleation
     for (int ptr = 0; ptr < totalNodes; ptr++) {
+        if (nodes.isDeactivated[ptr]) continue;
         double globAvailPart = nodes.particleComp[ptr]*(1-nodes.phase[ptr]);
         
         // Add grains from neighbors

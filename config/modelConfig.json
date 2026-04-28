@@ -38,7 +38,7 @@
   "dx_um": 1.0,
   "thickness2D_um": 0.5,
   "dt_s": 0.00000001,
-  "startTempK": 2890,
+  "startTempK": 2896,
   "radialCooling": false,
   "hemisphericalCooling": true,
   "periodicLeft": false,
@@ -82,8 +82,8 @@
   "particleSolidIntEnergy": 15.3,
   "particleLiqIntEnergy": 3.0,
 
-  "gridRows": 175,
-  "gridCols": 175,
+  "gridRows": 500,
+  "gridCols": 500,
 
   "enableVisualization": true,
   "enableProfiling": true

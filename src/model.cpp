@@ -11,8 +11,8 @@
 std::vector<double> SH_coeffs; // Spherical harmonic coefficients
 int Lmax = 8;                   // Maximum degree (match MATLAB)
 
-constexpr int SH_LUT_THETA_SIZE = 3600;
-constexpr int SH_LUT_PHI_SIZE   = 3600;
+constexpr int SH_LUT_THETA_SIZE = 720;
+constexpr int SH_LUT_PHI_SIZE   = 720;
 std::vector<float> SH_energyLUT;
 
 #include <fstream>
@@ -266,6 +266,7 @@ double dotAngle(std::array<double,3> vec1, std::array<double,3> vec2) {
 
 float calcPhaseDiffEnergy(int nodeIdx, config mConfig) {
     auto& nd = globalField.nodes;
+    if (nd.isDeactivated[nodeIdx]) return 0.0f;
     energyProfiler.phaseCalls++;
     auto totalStart = std::chrono::steady_clock::now();
 
@@ -312,6 +313,7 @@ float calcPhaseDiffEnergy(int nodeIdx, config mConfig) {
 
 std::array<float,9> calcGrainDiffEnergy(int nodeIdx, config mConfig) {
     auto& nd = globalField.nodes;
+    if (nd.isDeactivated[nodeIdx]) return {0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f};
     std::array<float,9> diffFree;
     energyProfiler.grainCalls++;
     auto totalStart = std::chrono::steady_clock::now();
@@ -414,6 +416,7 @@ std::array<float,9> calcGrainDiffEnergy(int nodeIdx, config mConfig) {
 
 double calcTemp(int nodeIdx, config& modelConfig, int t) {
     auto& nd = globalField.nodes;
+    if (nd.isDeactivated[nodeIdx]) return nd.temp[nodeIdx]; // or some default
     return modelConfig.startTemp + ((nd.tempDistance[nodeIdx]*modelConfig.tGrad) - modelConfig.tGrad*modelConfig.coolingRate* (modelConfig.dt*t));
 }
 

@@ -31,6 +31,8 @@ struct nodeArrays {
     std::vector<float> phase;          // float is sufficient for phase field [0,1]
     std::vector<float> particleComp;
     std::vector<uint8_t> exists;       // uint8_t instead of double (8x smaller)
+    std::vector<uint8_t> isDeactivated; // flag for deactivated nodes
+    std::vector<uint8_t> isParticleActive; // flag for particle updates
     std::vector<float> maxGrainPhase;
     std::vector<uint8_t> sumGrains;    // uint8_t sufficient for sum of grain phases
     std::vector<uint8_t> grainsHere;   // uint8_t sufficient (max 9 grains per node)
@@ -68,6 +70,8 @@ struct nodeArrays {
         phase.resize(totalNodes);
         particleComp.resize(totalNodes);
         exists.resize(totalNodes);
+        isDeactivated.resize(totalNodes);
+        isParticleActive.resize(totalNodes);
         maxGrainPhase.resize(totalNodes);
         sumGrains.resize(totalNodes);
         grainsHere.resize(totalNodes);
