@@ -29,14 +29,28 @@ std::vector<float> phaseDiffEn;
 std::vector<float> tempGrad;
 std::vector<float> tempPartComp;
 
-int main() {
+int main(int argc, char* argv[]) {
     std::cout << "Hello, World!" << std::endl;
+    
+    // Get config directory from command-line argument or use default
+    std::string configDir = "../config";
+    if (argc > 1) {
+        configDir = argv[1];
+        std::cout << "Using config directory: " << configDir << std::endl << std::flush;
+    } else {
+        std::cout << "Usage: PhaseFieldModel [config_directory]" << std::endl;
+        std::cout << "Using default config directory: " << configDir << std::endl << std::flush;
+    }
+    
     std::cout << "Attempting to read config file..." << std::endl << std::flush;
     if(!readCoeffs("../config/spherical_harmonics_coeffs.txt")) {
         std::cerr << "Failed to read spherical harmonic coefficients!\n";
         return 1;
     }
-    config configData = inputConfig("../config/modelConfig.json");
+    
+    // Construct path to config file in the specified directory
+    std::string configFilePath = configDir + "/modelConfig.json";
+    config configData = inputConfig(configFilePath);
     if (configData.success == 0) {
         std::cerr << "Config Failed to load from: ../config/modelConfig.json" << std::endl << std::flush;
         return 1;
@@ -47,7 +61,7 @@ int main() {
     int gridCols = configData.gridCols;
     
     //gridField model2;
-    globalField.init(configData, gridRows, gridCols);
+    globalField.init(configData, gridRows, gridCols, configDir);
     
     // Resize work vectors to match grid size
     newTemp.resize(globalField.totalNodes);
@@ -58,6 +72,7 @@ int main() {
     
     auto cwd = std::filesystem::current_path();
     std::cout << "Current working directory: " << cwd << std::endl << std::flush;
+    std::cout << "Output directory: " << configDir << std::endl << std::flush;
     std::cout << "About to start PhaseField Sim..." << std::endl << std::flush;
     auto start1 = std::chrono::steady_clock::now();
     std::cout << "Starting Time Steps..." << std::endl << std::flush;
@@ -81,8 +96,8 @@ int main() {
     std::cout << "Visualization disabled at compile time.\n";
 #endif
 
-    // prepare frames output dir
-    std::filesystem::path framesDir = std::filesystem::current_path() / "viz_frames";
+    // prepare frames output dir in the specified output directory
+    std::filesystem::path framesDir = std::filesystem::path(configDir) / "viz_frames";
     std::error_code ec;
     std::filesystem::create_directories(framesDir, ec);
 
@@ -284,7 +299,7 @@ int main() {
     // Convert backslashes to forward slashes for ffmpeg compatibility
     std::replace(framesPattern.begin(), framesPattern.end(), '\\', '/');
     
-    std::string outputVideo = (framesDir.parent_path() / "simulation_video.mp4").string();
+    std::string outputVideo = (std::filesystem::path(configDir) / "simulation_video.mp4").string();
     std::replace(outputVideo.begin(), outputVideo.end(), '\\', '/');
     
     // Build FFmpeg command using ffmpeg from PATH

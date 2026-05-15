@@ -37,10 +37,10 @@
 
   "dx_um": 1.0,
   "thickness2D_um": 0.5,
-  "dt_s": 0.00000001,
+  "dt_s": 0.0000001,
   "startTempK": 2896,
   "radialCooling": false,
-  "hemisphericalCooling": true,
+  "hemisphericalCooling": false,
   "periodicLeft": false,
   "periodicRight": false,
   "periodicTop": false,
@@ -55,10 +55,10 @@
   "cellHeightum": 50,
   "cellWidthum": 50,
 
-  "particleVolumeFraction": 0.01,
-  "particleDiameter_um": 0.05,
+  "particleVolumeFraction": 0.00,
+  "particleDiameter_um": 0.6,
 
-  "LiqSolIntEnergyJm2": 2.92,
+  "LiqSolIntEnergyJm2": 0.0292,
   "LiqSolIntWidthum": 1,
   "GrainIntEnergyJm2": 2.92,
   "GrainIntWidthum": 1.5,
@@ -68,7 +68,7 @@
 
   "BasePlateTempK": 500.0,
 
-  "diffusionActivationEnergy": 1.5,
+  "diffusionActivationEnergy": 9e-19,
   "TimeSteps": 100000000,
 
   "CoolingRatempers": 0.6,
@@ -76,14 +76,14 @@
   "tempGradKperm": 100000.0,
 
   "molarMass": 95.95,
-  "drivingForceSlopek": -0.0212,
-  "drivingForceIntercept": 61.3952,
+  "drivingForceSlopek": 0.0212,
+  "drivingForceIntercept": -61.3952,
 
-  "particleSolidIntEnergy": 15.3,
-  "particleLiqIntEnergy": 3.0,
+  "particleSolidIntEnergy": 0.39,
+  "particleLiqIntEnergy": 0.40,
 
-  "gridRows": 500,
-  "gridCols": 500,
+  "gridRows": 400,
+  "gridCols": 200,
 
   "enableVisualization": true,
   "enableProfiling": true

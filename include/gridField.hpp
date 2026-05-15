@@ -119,9 +119,13 @@ struct gridField {
     std::array<int,2> grainLocTemporary;
     long long diffEnergyTime;  // Store diff energy calculation time
     bool canNucleate;  // Flag to enable/disable nucleation when particles available
+    
+    // Solidification tracking
+    int stepCounter;  // Track simulation steps
+    std::string solidificationOutputFile;  // CSV file for solidification data
 
     void buildGrid();
-    void init(config modelConfig, int rows = 500, int cols = 500);
+    void init(config modelConfig, int rows = 500, int cols = 500, const std::string& outputDir = ".");
     void addGrain(int nodeIdx);
     void update(
         std::vector<float> &phaseDiffEn,
@@ -131,6 +135,7 @@ struct gridField {
         bool enableProfiling = true
     );
     void recordDiffEnergyTime(long long timeMs);
+    void recordSolidification();  // Calculate and save solidification percentage
 };
 
 // Declare global variable (but don't allocate it here)

@@ -2,6 +2,8 @@
 #include <iostream>
 #include <random>
 #include <cmath>
+#include <fstream>
+#include <chrono>
 
 // Global grid dimensions - set at runtime
 int GRID_ROWS = 500;
@@ -111,7 +113,7 @@ void gridField::buildGrid() {
     }
 }
 
-void gridField::init(config modelConfig, int rows, int cols) {
+void gridField::init(config modelConfig, int rows, int cols, const std::string& outputDir) {
     // Set runtime grid dimensions
     gridRows = rows;
     gridCols = cols;
@@ -121,6 +123,15 @@ void gridField::init(config modelConfig, int rows, int cols) {
     GRID_ROWS = rows;
     GRID_COLS = cols;
     TOTAL_NODES = rows * cols;
+    
+    // Initialize solidification tracking
+    stepCounter = 0;
+    solidificationOutputFile = outputDir + "/solidification_tracking.csv";
+    
+    // Create and initialize CSV file with headers
+    std::ofstream csvFile(solidificationOutputFile);
+    csvFile << "Step,AreaFractionSolidified\n";
+    csvFile.close();
     
     // Dynamically allocate all vectors to the required size
     nodes.resize(totalNodes);
@@ -186,7 +197,7 @@ void gridField::init(config modelConfig, int rows, int cols) {
         } else if (modelConfig.radialCooling) {
             nodes.tempDistance[idx] = (std::sqrt(std::pow(gridRows/2,2)+std::pow(gridCols/2,2))-1*std::sqrt(std::pow(i - gridRows/2, 2) + std::pow(j - gridCols/2, 2)) )* modelConfig.dx; // distance from center for radial cooling
         } else {
-            nodes.tempDistance[idx] = ((gridRows - 1 - i) * modelConfig.dx); // vertical distance from top for planar cooling
+            nodes.tempDistance[idx] = ((i) * modelConfig.dx); // vertical distance from top for planar cooling
         }
         nodes.baseTemp[idx] = static_cast<float>(modelConfig.startTemp + (nodes.tempDistance[idx] * modelConfig.tGrad));
         nodes.temp[idx] = nodes.baseTemp[idx];
@@ -247,12 +258,17 @@ void gridField::update(
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> prob_dist(0.0, 1.0);
-    bool grainExists = 0;
 
     static long long totalFirstUpdateTime = 0;
     static long long totalParticleUpdateTime = 0;
     static long long totalPropagateGrainTime = 0;
     static int profileCount = 0;
+
+    // Increment step counter and record solidification every 100 steps
+    stepCounter++;
+    if (stepCounter % 100 == 0) {
+        recordSolidification();
+    }
 
     // Update temperature for all nodes
     #pragma omp parallel for
@@ -272,12 +288,12 @@ void gridField::update(
     #pragma omp parallel for
     for (int idx = 0; idx < totalNodes; idx++) {
         if (nodes.isDeactivated[idx]) continue;
-        nodes.phase[idx] = nodes.phase[idx] - pow((1-nodes.particleComp[idx]),3)*(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[idx]*4e-14;
+        nodes.phase[idx] = nodes.phase[idx] - pow((1-nodes.particleComp[idx]),3/2)*(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[idx]*5e-13;
         double grainHereCount = 0.0;
         float maxGrainPhase = 0.0f;
 
         for (int g = 0; g < nodes.grainsHere[idx]; g++) {
-            nodes.grainPhases[idx][g] = nodes.grainPhases[idx][g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[idx][g]*2e-14);
+            nodes.grainPhases[idx][g] = nodes.grainPhases[idx][g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[idx][g]*3e-14);
             if (nodes.grainPhases[idx][g] < 0.0) nodes.grainPhases[idx][g] = 0.0;
             if (nodes.grainPhases[idx][g] > 1.0) nodes.grainPhases[idx][g] = 1.0;
             grainHereCount = grainHereCount + pow(nodes.grainPhases[idx][g],2);
@@ -324,7 +340,7 @@ void gridField::update(
 
     auto t1_start = std::chrono::steady_clock::now();
 
-    const double particleMobilityLiquid = 2e-3;
+    const double particleMobilityLiquid = 2e-4;
     const double particleMobilitySolid = 1e-18;
     double dx = mConfig.dx;
     double denom = (dx * dx);
@@ -425,15 +441,47 @@ void gridField::update(
         }
         
         if (nodes.temp[ptr] < (mConfig.meltTemp)) {
-            grainExists = 0;
-            if (nodes.grainsHere[ptr] > 0 ) grainExists = 1;
-            if (nodes.grainsToAdd[ptr] > 0) grainExists = 1;
-            if (!grainExists && prob_dist(gen) < (1 - exp(pow(mConfig.dx,2)*mConfig.thickness2D * mConfig.dt * calcNucRate(nodes.temp[ptr], mConfig) * -1)) && nodes.phase[ptr] < 0.1) { 
+            bool grainExistsLocal = false;
+            if (nodes.grainsHere[ptr] > 0) grainExistsLocal = true;
+            if (nodes.grainsToAdd[ptr] > 0) grainExistsLocal = true;
+            double rate = calcNucRate(nodes.temp[ptr], mConfig);
+
+            // Volume of cell
+            double cellVolume = mConfig.dx * mConfig.dx * mConfig.thickness2D;
+
+            // Expected number of events in timestep
+            double lambda = rate * cellVolume * mConfig.dt;
+
+            // Clamp for safety (optional but recommended)
+            if (lambda < 0.0) lambda = 0.0;
+
+            // Convert to probability
+            double P;
+            if (lambda < 1e-6) {
+                // Avoid precision loss for very small lambda
+                P = lambda;
+            } else {
+                P = 1.0 - exp(-lambda);
+            }
+
+            if (!grainExistsLocal && prob_dist(gen) < P)
+            {
                 nodes.homoNucleateHere[ptr] = true;
             }
-            if (!grainExists &&  nodes.temp[ptr] < mConfig.meltTemp-(mConfig.hetNucUnderCooling)&& prob_dist(gen) < nodes.particleComp[ptr]*mConfig.dt && !nodes.hasHetNucleated[ptr] && nodes.phase[ptr] < 0.1) { 
-                nodes.hetNucleateHere[ptr] = true;
-                std::cout << "Node " << ptr << " eligible for heterogeneous nucleation. Particle Comp: " << nodes.particleComp[ptr] << std::endl;
+            if (!grainExistsLocal &&  nodes.temp[ptr] < mConfig.hetNucUnderCooling && !nodes.hasHetNucleated[ptr]) {
+                double cellVolume = mConfig.dx * mConfig.dx * mConfig.thickness2D;
+                double particleVolume = (4.0/3.0) * M_PI * pow(mConfig.particleRadius, 3);
+                double particleFraction = nodes.particleComp[ptr] * cellVolume / particleVolume;
+                if (particleFraction >= 1.0) {
+                    nodes.hetNucleateHere[ptr] = true;
+                    std::cout << "Node " << ptr << " eligible for heterogeneous nucleation. Particle Comp: " << nodes.particleComp[ptr] << std::endl;
+                } else if (particleFraction > 0.0) {
+                    double prob = pow(particleFraction,3);; // simple linear scaling of probability with particle fraction and time step
+                    if (prob_dist(gen) < prob) {
+                        nodes.hetNucleateHere[ptr] = true;
+                        std::cout << "Node " << ptr << " eligible for heterogeneous nucleation. Particle Comp: " << nodes.particleComp[ptr] << std::endl;
+                    }
+                }
             }
         }
         
@@ -507,27 +555,62 @@ void gridField::recordDiffEnergyTime(long long timeMs) {
     diffEnergyTime = timeMs;
 }
 
+void gridField::recordSolidification() {
+    // Count nodes that are solidified (phase > 0.95)
+    int solidifiedCount = 0;
+    #pragma omp parallel for reduction(+:solidifiedCount)
+    for (int idx = 0; idx < totalNodes; idx++) {
+        if (nodes.phase[idx] > 0.95f) {
+            solidifiedCount++;
+        }
+    }
+    
+    // Calculate area fraction solidified
+    double areaFractionSolidified = static_cast<double>(solidifiedCount) / static_cast<double>(totalNodes);
+    
+    // Append to CSV file
+    std::ofstream csvFile(solidificationOutputFile, std::ios::app);
+    csvFile << stepCounter << "," << areaFractionSolidified << "\n";
+    csvFile.close();
+}
+
 // Calculate nucleation rate based on temperature
-float calcNucRate(double temp, config modelConf) {
-    double k  = 1.380649e-23;        // Boltzmann constant (J/K)
-    double h  = 6.62607015e-34;      // Planck constant (J·s)
-    double NA = 6.02214076e23;       // Avogadro (1/mol)
+float calcNucRate(double temp, const config modelConf) {
+    // Constants
+    const double k  = 1.380649e-23;   // Boltzmann (J/K)
+    const double h  = 6.62607015e-34; // Planck (J·s)
+    const double NA = 6.02214076e23;  // Avogadro (1/mol)
+    const double R  = 8.314462618;    // Gas constant (J/mol·K)
 
-    double dForceMo = (modelConf.drivingForceSlopek * temp
-                     + modelConf.drivingForceIntercept)*5000/modelConf.molarVolume;
+    // Driving force (J/m^3)
+    double dGv = (modelConf.drivingForceSlopek * temp +
+                  modelConf.drivingForceIntercept) /
+                 modelConf.molarVolume;
 
-    double cellVolume = pow(modelConf.dx,2)*modelConf.thickness2D;
+    // Enforce physical condition: no nucleation if not undercooled
+    if (dGv >= 0.0) return 0.0f;
+
+    // Interfacial energy
+    double gamma = modelConf.liqSolIntE;
+
+    // Critical barrier (J)
+    double dGstar = (16.0 * M_PI * pow(gamma, 3.0)) /
+                    (3.0 * dGv * dGv);
+
+    // Atomic density (sites per m^3)
     double atomicDensity = NA / modelConf.molarVolume;
-    double numAtoms = atomicDensity * cellVolume;
-    double gamma = 0.05;
-    
-    double dGstar = (16.0 * 3.141592 * pow(gamma, 3.0)) /
-                    (3.0 * dForceMo * dForceMo);
-    
-    double diffTerm = exp(-modelConf.diffusionActivationEnergy /
-                          (8.314462618 * temp));
-    
-    double prefactor = (k * temp / h) * numAtoms;
-    double rate = prefactor * diffTerm * exp(-dGstar / (k * temp));
-    return (float)rate;
+
+    // Attempt frequency (~ atomic vibration frequency)
+    double nu = (k * temp) / h;
+
+    // Diffusion term (now consistent in molar units)
+    double diffTerm = exp(-modelConf.diffusionActivationEnergy * NA /
+                          (R * temp));
+
+    // Final nucleation rate (per m^3·s)
+    double rate = atomicDensity * nu *
+                  diffTerm *
+                  exp(-dGstar / (k * temp));
+
+    return static_cast<float>(rate);
 }

@@ -165,8 +165,8 @@ config inputConfig(std::string configSource) {
     newConfig.tGrad = readOr<double>(j, "tempGradKperm", 20000);
     newConfig.minTemp = readOr<double>(j, "MinimumTempK", 100);
 
-    newConfig.drivingForceSlopek = readOr<double>(j, "drivingForceSlopek", 13.8);
-    newConfig.drivingForceIntercept = readOr<double>(j, "drivingForceIntercept", 39842);
+    newConfig.drivingForceSlopek = readOr<double>(j, "drivingForceSlopek", 13.8)*1000;
+    newConfig.drivingForceIntercept = readOr<double>(j, "drivingForceIntercept", 39842)*1000;
     newConfig.diffusionActivationEnergy = readOr<double>(j, "diffusionActivationEnergy", 1.5);
 
     newConfig.molarMass = readOr<double>(j, "molarMass", 95.95);
@@ -193,12 +193,16 @@ config inputConfig(std::string configSource) {
     newConfig.steps = {height, width};
     newConfig.totalSteps = height * width;
     double energyTempConv = (newConfig.heatCapacity)/(newConfig.density)*newConfig.dx*newConfig.dx; // J/K
-    // Match MATLAB: ((pi*r^2)*(Es-El) + (pi*(r+0.3e-9)^2)*liqSolIntE) / energyTempConv
-    newConfig.hetNucUnderCooling = (
-        (3.141592653589793 * pow(newConfig.particleRadius,2) * (newConfig.particleSolidIntEnergy - newConfig.particleLiquidIntEnergy))
-        + (3.141592653589793 * pow((newConfig.particleRadius + 0.3e-9),2) * newConfig.liqSolIntE)
-    ) / energyTempConv; // temperature change (K)
-    std::cout << "Heterogeneous Nucleation Undercooling Threshold: " << newConfig.hetNucUnderCooling << " J/m^3" << std::endl;
+    // Heterogeneous nucleation undercooling: temperature where driving force equals surface energy penalty
+    double surfaceArea = 4.0 * M_PI * pow(newConfig.particleRadius, 2);
+    double volume = (4.0 / 3.0) * M_PI * pow(newConfig.particleRadius, 3);
+    double interfacialEnergy = newConfig.particleSolidIntEnergy + newConfig.liqSolIntE - newConfig.particleLiquidIntEnergy;
+    double surfaceEnergyPenalty = surfaceArea * interfacialEnergy;
+    std::cout << "Surface Energy Penalty for Nucleation: " << surfaceEnergyPenalty << " J" << std::endl;
+
+    double molarDrivingForceReq = (surfaceEnergyPenalty * newConfig.molarVolume) / volume;
+    newConfig.hetNucUnderCooling = (molarDrivingForceReq + newConfig.drivingForceIntercept) / (-1*newConfig.drivingForceSlopek);
+    std::cout << "Heterogeneous Nucleation Undercooling Threshold: " << newConfig.hetNucUnderCooling << " K" << std::endl;
     // Configuration flags
     newConfig.enableVisualization = readOr<bool>(j, "enableVisualization", true);
     newConfig.enableProfiling = readOr<bool>(j, "enableProfiling", true);

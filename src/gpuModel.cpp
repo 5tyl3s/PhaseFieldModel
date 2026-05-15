@@ -36,7 +36,7 @@ __global__ void phaseDiffEn(double* phaseDiffEnGrid, int gridCols, double dt, do
     double temp = temps[index];
 
     // Compute phase energy term here
-    double phaseEnergy = (2*phase-2)*0.5*(1-(tanh(1000000*((temp/meltTemp)-1))))*(1000*(-0.0212 *temp + 61.3952)/molarVolume) + (2*phase*(1-0.5*(1-(tanh(1000000*((temp/meltTemp)-1)))))*(1000*(0.0349*temp - 101.0704)/molarVolume)) + phaseCoefficient*(10000*((2* phase-2) * grainSum[index]+(2*phase* (1 - grainSum[index])))) + ((phase) * pow(part,2)*particleSolidIntEnergy*(0.66*4*3.14149 * pow(particleRadius,2)/((4/3)*3.14159*pow(particleRadius,3)))) + ((2*phase-2) * (pow(part,2))*particleLiquidIntEnergy*(0.66*4*3.14149 * pow(particleRadius,2)/((4/3)*3.14159*pow(particleRadius,3))));
+    double phaseEnergy = (2*phase-2)*0.5*(1-(tanh(1000000*((temp/meltTemp)-1))))*((-0.0212 *temp + 61.3952)/molarVolume) + (2*phase*(1-0.5*(1-(tanh(1000000*((temp/meltTemp)-1)))))*((0.0349*temp - 101.0704)/molarVolume)) + phaseCoefficient*(10000*((2* phase-2) * grainSum[index]+(2*phase* (1 - grainSum[index])))) + ((phase) * pow(part,2)*particleSolidIntEnergy*(0.66*4*3.14149 * pow(particleRadius,2)/((4/3)*3.14159*pow(particleRadius,3)))) + ((2*phase-2) * (pow(part,2))*particleLiquidIntEnergy*(0.66*4*3.14149 * pow(particleRadius,2)/((4/3)*3.14159*pow(particleRadius,3))));
     double lapEnergy = 0.0; // Placeholder for gradient energy term
     
     phaseDiffEnGrid[index] = (dt / (dx * dx)) * phaseEnergy * 1.6e-16;
