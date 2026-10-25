@@ -96,7 +96,9 @@ struct nodeArrays {
 };
 
 // Helper function to calculate nucleation rate
-float calcNucRate(double temp, config modelConf);
+float calcNucRate(double temp, const config& modelConf);
+// Heterogeneous (Turnbull-Fisher) nucleation rate per nucleation site [1/s]
+double calcHetNucRatePerSite(double temp, const config& modelConf);
 
 struct gridField {
     config mConfig;

@@ -429,14 +429,14 @@ double calcParticleCompDiff(int nodeIdx, config& modelConfig) {
     double pha = nd.phase[nodeIdx];
     const double Vp = (4.0/3.0) * 3.14159 * std::pow(modelConfig.particleRadius, 3);
     const double cellPackedVolume = modelConfig.dx*modelConfig.dx*modelConfig.thickness2D;
-    double sizeScale = 0.6*4*3.14149 * pow(modelConfig.particleRadius,2)/((4/3)*3.14159*pow(modelConfig.particleRadius,3));
+    double sizeScale = 0.6*4*3.14149 * pow(modelConfig.particleRadius,2)/((4.0/3.0)*3.14159*pow(modelConfig.particleRadius,3));
     double muLocal = 2 *c  *pha * pow(modelConfig.dx,2)*modelConfig.thickness2D * modelConfig.particleSolidIntEnergy*sizeScale
                    +2 *c * (1.0 - pha) * pow(modelConfig.dx,2)*modelConfig.thickness2D*modelConfig.particleLiquidIntEnergy*sizeScale
-                   + 2e7*(pow(modelConfig.dx,2)*modelConfig.thickness2D*(std::sin(2*3.14159 * (c*cellPackedVolume) / Vp)));
+                   + 0.4*0*1e13*modelConfig.particleRadius*(pow(modelConfig.dx,2)*modelConfig.thickness2D*(std::sin(2*3.14159 * (c*cellPackedVolume) / Vp)));
     double muGrav = 9.81 * (modelConfig.particleDensity-modelConfig.density) *pow(modelConfig.dx,4) *nd.yPos[nodeIdx];
     if (c > 1) muLocal  = muLocal+ 5e-17*std::pow(10*(c-1),2);
     if (c < 0) muLocal = muLocal-5e-17*std::pow(10*(c),2);
-    double mu = muLocal + muGrav;
+    double mu = muLocal;
     auto muEnd = std::chrono::steady_clock::now();
     energyProfiler.particleMuNs += std::chrono::duration_cast<std::chrono::nanoseconds>(muEnd - muStart).count();
 

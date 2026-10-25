@@ -5,6 +5,7 @@ using json = nlohmann::json;
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <vector>
 
 
 struct config {
@@ -33,8 +34,10 @@ struct config {
     double grainIntE;
     std::vector<int> steps;
     double phaseCoefficient;
+    double phaseMobility;
     double barrierHeightPhase;
     double barrierHeightGrain;
+    double grainMobility;
     double phasePreCo;
     double grainPreCo;
     double particleSlowingCoefficient;
@@ -53,7 +56,13 @@ struct config {
     double molarVolume;
     double diffusionActivationEnergy;
     double particleDiameter; //m
+    double particleMobilityLiquid;
+    double particleMobilitySolid;
     double hetNucUnderCooling;
+    double hetNucSitesPerParticle = 1.0; // Active nucleation sites per particle
+    double hetBarrierTempMin = 0.0;      // K, first entry of hetBarrierTable
+    double hetBarrierTempStep = 0.0;     // K, spacing of hetBarrierTable
+    std::vector<double> hetBarrierTable; // Peak heterogeneous barrier [J] vs T (inf where unavailable)
     double particleDensity; //kg/m^3
     double thickness2D; //um
 
@@ -79,3 +88,7 @@ struct config {
 
 
 config inputConfig(std::string configSource);
+
+// Peak heterogeneous nucleation barrier [J] at temperature T (interpolated from
+// the table built at config load); returns +inf if unavailable.
+double hetNucPeakBarrier(double temp, const config& modelConf);

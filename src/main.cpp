@@ -12,7 +12,9 @@
 #include "helperFunctions.hpp"    // helper functions
 #endif
 #include <omp.h>
+#ifdef _WIN32
 #include <direct.h> // For _getcwd on Windows
+#endif
 
 #include <fstream>
 #include <vector>
@@ -21,6 +23,9 @@
 #include <chrono>
 #include <filesystem>
 #include <iomanip>
+#include <algorithm>
+#include <cmath>
+#include <limits>
 
 // Use vectors for dynamic allocation (size determined at runtime)
 std::vector<float> newTemp;
@@ -28,6 +33,175 @@ std::vector<std::array<float,9>> grainDiffEn;
 std::vector<float> phaseDiffEn;
 std::vector<float> tempGrad;
 std::vector<float> tempPartComp;
+
+namespace {
+
+struct NucleationEstimateBin {
+    double nodeCount = 0.0;
+    double particleCount = 0.0;
+    double nodeOffsetSum = 0.0;
+    double particleOffsetSum = 0.0;
+};
+
+struct NucleationChannelEstimate {
+    double cumulativeExpectedEvents = 0.0;
+    double temperature = 0.0;
+    double timeStep = 0.0;
+    bool reachesOneExpectedEvent = false;
+};
+
+double boundedExpectedEvents(double expectedEvents) {
+    if (!(expectedEvents > 0.0)) return 0.0;
+    if (!std::isfinite(expectedEvents)) return 1e100;
+    return std::min(expectedEvents, 1e100);
+}
+
+void printNucleationChannelEstimate(
+    const char* channelName,
+    const NucleationChannelEstimate& estimate) {
+    const std::streamsize previousPrecision = std::cout.precision();
+    std::cout << std::setprecision(6);
+    if (estimate.reachesOneExpectedEvent) {
+        std::cout << "Estimated first " << channelName << " nucleation: T ≈ "
+                  << estimate.temperature
+                  << " K (cumulative expected events reach 1; about 63% chance of at least one event), "
+                  << "around timestep " << estimate.timeStep << "."
+                  << std::endl;
+    } else {
+        std::cout << channelName
+                  << " nucleation: cumulative expected events do not reach 1 within the configured run "
+                  << "(total expected events: " << estimate.cumulativeExpectedEvents
+                  << "; probability of at least one event: "
+                  << -std::expm1(-estimate.cumulativeExpectedEvents) << ")."
+                  << std::endl;
+    }
+    std::cout.precision(previousPrecision);
+}
+
+void reportExpectedNucleationTemperatures(const gridField& field, const config& modelConfig) {
+    constexpr int maxTemperatureSamples = 2048;
+    constexpr int temperatureBins = 512;
+
+    if (modelConfig.timeSteps <= 0 || field.totalNodes <= 0) {
+        std::cout << "First-nucleation temperature estimate unavailable: empty simulation."
+                  << std::endl;
+        return;
+    }
+
+    const double particleVolume = (4.0 / 3.0) * M_PI *
+                                 std::pow(modelConfig.particleRadius, 3.0);
+    const double cellVolume = modelConfig.dx * modelConfig.dx * modelConfig.thickness2D;
+    if (!std::isfinite(particleVolume) || particleVolume <= 0.0 ||
+        !std::isfinite(cellVolume) || cellVolume <= 0.0) {
+        std::cout << "First-nucleation temperature estimate unavailable: invalid cell or particle volume."
+                  << std::endl;
+        return;
+    }
+
+    double minOffset = std::numeric_limits<double>::infinity();
+    double maxOffset = -std::numeric_limits<double>::infinity();
+    for (int node = 0; node < field.totalNodes; ++node) {
+        const double offset = field.nodes.tempDistance[node] * modelConfig.tGrad;
+        minOffset = std::min(minOffset, offset);
+        maxOffset = std::max(maxOffset, offset);
+    }
+
+    std::vector<NucleationEstimateBin> bins(temperatureBins);
+    for (int node = 0; node < field.totalNodes; ++node) {
+        const double offset = field.nodes.tempDistance[node] * modelConfig.tGrad;
+        int binIndex = 0;
+        if (maxOffset > minOffset) {
+            const double fraction = (offset - minOffset) / (maxOffset - minOffset);
+            binIndex = static_cast<int>(fraction * (temperatureBins - 1));
+            binIndex = std::max(0, std::min(temperatureBins - 1, binIndex));
+        }
+        NucleationEstimateBin& bin = bins[binIndex];
+        bin.nodeCount += 1.0;
+        bin.nodeOffsetSum += offset;
+
+        const double particles = field.nodes.particleComp[node] * cellVolume / particleVolume;
+        if (particles > 0.0 && std::isfinite(particles)) {
+            bin.particleCount += particles;
+            bin.particleOffsetSum += particles * offset;
+        }
+    }
+
+    const int sampleCount = std::min(maxTemperatureSamples, modelConfig.timeSteps);
+    const double stepsPerSample =
+        static_cast<double>(modelConfig.timeSteps) / static_cast<double>(sampleCount);
+    const double coolingPerStep = modelConfig.tGrad * modelConfig.coolingRate * modelConfig.dt;
+    NucleationChannelEstimate homogeneousEstimate;
+    NucleationChannelEstimate heterogeneousEstimate;
+
+    for (int sample = 0; sample < sampleCount; ++sample) {
+        const double timeStep = (sample + 0.5) * stepsPerSample;
+        double sampleHomogeneousEvents = 0.0;
+        double sampleHomogeneousTemperatureSum = 0.0;
+        double sampleHeterogeneousEvents = 0.0;
+        double sampleHeterogeneousTemperatureSum = 0.0;
+
+        for (const NucleationEstimateBin& bin : bins) {
+            if (bin.nodeCount > 0.0) {
+                const double offset = bin.nodeOffsetSum / bin.nodeCount;
+                const double temperature = modelConfig.startTemp + offset - coolingPerStep * timeStep;
+                if (temperature < modelConfig.meltTemp) {
+                    const double expectedHomogeneous = boundedExpectedEvents(
+                        static_cast<double>(calcNucRate(temperature, modelConfig)) *
+                        cellVolume * modelConfig.dt * stepsPerSample * bin.nodeCount);
+                    if (expectedHomogeneous > 0.0) {
+                        sampleHomogeneousEvents += expectedHomogeneous;
+                        sampleHomogeneousTemperatureSum += expectedHomogeneous * temperature;
+                    }
+                }
+            }
+
+            if (bin.particleCount > 0.0) {
+                const double offset = bin.particleOffsetSum / bin.particleCount;
+                const double temperature = modelConfig.startTemp + offset - coolingPerStep * timeStep;
+                const double expectedHeterogeneous = boundedExpectedEvents(
+                    bin.particleCount * modelConfig.hetNucSitesPerParticle *
+                    calcHetNucRatePerSite(temperature, modelConfig) *
+                    modelConfig.dt * stepsPerSample);
+                if (expectedHeterogeneous > 0.0) {
+                    sampleHeterogeneousEvents += expectedHeterogeneous;
+                    sampleHeterogeneousTemperatureSum += expectedHeterogeneous * temperature;
+                }
+            }
+        }
+
+        if (!homogeneousEstimate.reachesOneExpectedEvent &&
+            homogeneousEstimate.cumulativeExpectedEvents + sampleHomogeneousEvents >= 1.0 &&
+            sampleHomogeneousEvents > 0.0) {
+            const double crossingFraction =
+                (1.0 - homogeneousEstimate.cumulativeExpectedEvents) / sampleHomogeneousEvents;
+            homogeneousEstimate.timeStep = (timeStep - 0.5 * stepsPerSample) +
+                                           crossingFraction * stepsPerSample;
+            homogeneousEstimate.temperature =
+                sampleHomogeneousTemperatureSum / sampleHomogeneousEvents;
+            homogeneousEstimate.reachesOneExpectedEvent = true;
+        }
+
+        if (!heterogeneousEstimate.reachesOneExpectedEvent &&
+            heterogeneousEstimate.cumulativeExpectedEvents + sampleHeterogeneousEvents >= 1.0 &&
+            sampleHeterogeneousEvents > 0.0) {
+            const double crossingFraction =
+                (1.0 - heterogeneousEstimate.cumulativeExpectedEvents) / sampleHeterogeneousEvents;
+            heterogeneousEstimate.timeStep = (timeStep - 0.5 * stepsPerSample) +
+                                             crossingFraction * stepsPerSample;
+            heterogeneousEstimate.temperature =
+                sampleHeterogeneousTemperatureSum / sampleHeterogeneousEvents;
+            heterogeneousEstimate.reachesOneExpectedEvent = true;
+        }
+
+        homogeneousEstimate.cumulativeExpectedEvents += sampleHomogeneousEvents;
+        heterogeneousEstimate.cumulativeExpectedEvents += sampleHeterogeneousEvents;
+    }
+
+    printNucleationChannelEstimate("homogeneous", homogeneousEstimate);
+    printNucleationChannelEstimate("heterogeneous", heterogeneousEstimate);
+}
+
+}
 
 int main(int argc, char* argv[]) {
     std::cout << "Hello, World!" << std::endl;
@@ -62,6 +236,7 @@ int main(int argc, char* argv[]) {
     
     //gridField model2;
     globalField.init(configData, gridRows, gridCols, configDir);
+    reportExpectedNucleationTemperatures(globalField, configData);
     
     // Resize work vectors to match grid size
     newTemp.resize(globalField.totalNodes);
@@ -342,4 +517,3 @@ int main(int argc, char* argv[]) {
 
 
 // Helper function to resize grainDiffEn everywhere
-

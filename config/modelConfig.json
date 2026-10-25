@@ -32,12 +32,16 @@
     "drivingForceIntercept": "Intercept used in driving force calculation.",
     "particleSolidIntEnergy": "Particle interaction energy in solid (J/m^2 or arbitrary unit used in model).",
     "particleLiqIntEnergy": "Particle interaction energy in liquid.",
+    "PhaseMobility": "Phase mobility coefficient used in the phase evolution update.",
+    "GrainMobility": "Grain mobility coefficient used in the grain evolution update.",
+    "ParticleMobilityLiquid": "Particle mobility in liquid phase.",
+    "ParticleMobilitySolid": "Particle mobility in solid phase.",
     "Note": "Removed keys: solidConductivityWMK, HomogeneousNucleationCoefficient, UndercoolingRequirement. Those are handled via defaults in code if needed."
   },
 
   "dx_um": 1.0,
   "thickness2D_um": 0.5,
-  "dt_s": 0.0000001,
+  "dt_s": 0.00000002,
   "startTempK": 2896,
   "radialCooling": false,
   "hemisphericalCooling": false,
@@ -55,10 +59,10 @@
   "cellHeightum": 50,
   "cellWidthum": 50,
 
-  "particleVolumeFraction": 0.00,
-  "particleDiameter_um": 0.6,
+  "particleVolumeFraction": 0.02,
+  "particleDiameter_um": 0.3,
 
-  "LiqSolIntEnergyJm2": 0.0292,
+  "LiqSolIntEnergyJm2": 0.02,
   "LiqSolIntWidthum": 1,
   "GrainIntEnergyJm2": 2.92,
   "GrainIntWidthum": 1.5,
@@ -79,11 +83,15 @@
   "drivingForceSlopek": 0.0212,
   "drivingForceIntercept": -61.3952,
 
-  "particleSolidIntEnergy": 0.39,
-  "particleLiqIntEnergy": 0.40,
+  "particleSolidIntEnergy": 0.025,
+  "particleLiqIntEnergy": 0.03,
+  "PhaseMobility": 7e-13,
+  "GrainMobility": 3e-14,
+  "ParticleMobilityLiquid": 1e-1,
+  "ParticleMobilitySolid": 1e-18,
 
-  "gridRows": 400,
-  "gridCols": 200,
+  "gridRows": 75,
+  "gridCols": 75,
 
   "enableVisualization": true,
   "enableProfiling": true

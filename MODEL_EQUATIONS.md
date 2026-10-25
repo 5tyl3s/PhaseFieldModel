@@ -236,35 +236,19 @@ $$c_p(i) \gets c_p(i) + \frac{(1 - \phi(i))}{L_{\text{total}}}$$
 4. Clamp all values to [0, 1]
 
 ### Heterogeneous Nucleation
-**Condition**: Heterogeneous nucleation is evaluated using a temperature-driven driving force computed per node and a startup-computed undercooling requirement based on particle energetics.
+**Threshold calculation**: At startup, `importConfig.cpp` computes the temperature where the maximum heterogeneous free-energy barrier reaches 0.1% of the classical homogeneous barrier at the configured reference undercooling (`underCoolReq`, default 1 K). The calculation follows the supplied MATLAB method: it evaluates the spherical-nucleus barrier on a logarithmic radius grid, refines the peak, then bisects in temperature.
 
-Per-node driving force (as used elsewhere in the code):
+The model's molar driving force is
 
-$$\Delta G_{\text{het}}(T) = 1000 \cdot \frac{m_{\text{slope}} \cdot T + b_{\text{intercept}}}{\bar{V}}$$
+$$\Delta G_v(T) = -\frac{m_{\text{slope}}T+b_{\text{intercept}}}{\bar{V}}$$
 
-The heterogeneous-nucleation undercooling threshold is computed at startup (in `importConfig.cpp`) using the MATLAB expression you provided. The code computes an energy-to-temperature conversion
+which is positive below the melting point. The barrier geometry uses the particle radius, particle/solid and particle/liquid interfacial energies, and liquid–solid interfacial energy. Young's relation gives
 
-$$\text{energyTempConv} = \frac{c_p}{\rho} \; (\Delta x)^2$$
+$$\cos(\theta_Y) = \frac{\gamma_{\text{particle-liquid}}-\gamma_{\text{particle-solid}}}{\gamma_{\text{liquid-solid}}}$$
 
-and then computes the undercooling requirement (temperature change) as
+If the cosine is outside the partial-wetting range, the implementation uses the complete-wetting limit and sets the threshold to the melting temperature. Otherwise, it solves for the barrier-equality temperature within `[MinimumTempK, meltTemp - 0.001 K]`. An unresolved peak or a target barrier not crossed in that range is a configuration error.
 
-$$\Delta T_{\text{het}} = \frac{\pi r_p^2 (E_s - E_l) + \pi (r_p + 0.3\times10^{-9})^2 \; \gamma_{LS}}{\text{energyTempConv}}$$
-
-where:
-- $r_p$ = particle radius
-- $E_s$ = particle solid-interface energy
-- $E_l$ = particle liquid-interface energy
-- $\gamma_{LS}$ = liquid–solid interfacial energy (the code uses `liqSolIntE`)
-
-Heterogeneous nucleation is permitted when the local driving force expressed as an equivalent temperature (via the driving-force formula above) exceeds this startup-computed undercooling threshold:
-
-$$\Delta G_{\text{het}}(T) \text{ (as evaluated at node temperature } T) \; > \; \Delta T_{\text{het}}$$
-
-AND
-
-$$P_{\text{het}} = c_p \cdot \Delta t \quad (\text{particle consumption probability/rate})$$
-
-Implementation note: `importConfig.cpp` computes `hetNucUnderCooling` from the formula above and documents it as a temperature change (K). The nucleation handler uses `drivingForceSlopek`/`drivingForceIntercept` and the local `molarVolume` to compute the per-node driving force which is compared to `hetNucUnderCooling`. If you prefer the comparison done purely in energetic units (J/m^3) instead of temperature, we can adjust either the startup conversion or the driving-force expression to ensure exact unit consistency.
+**Nucleation condition**: A node is eligible for heterogeneous nucleation when its absolute temperature is below the startup-computed threshold and it has not already nucleated. The existing particle-fraction check/probability then determines whether nucleation occurs.
 
 **Particle Redistribution** (NEW): When heterogeneous nucleation occurs at node $n$:
 1. Set nucleation node: $c_p(n) \gets 1$ (maximum particle absorption)
@@ -446,4 +430,3 @@ The following parameters are **adjustable for model calibration**:
 - **Grain boundary energy**: Read & Shockley, Phys. Rev. 78, 275 (1950)
 - **Classical nucleation theory**: Kelton, Solid State Physics 45, 75 (1991)
 - **Spherical harmonics**: Varshalovich, Moskalev & Khersonskii, Quantum Theory of Angular Momentum (1988)
-

@@ -1,4 +1,5 @@
 #include "gridField.hpp"
+#include <algorithm>
 #include <iostream>
 #include <random>
 #include <cmath>
@@ -263,6 +264,8 @@ void gridField::update(
     static long long totalParticleUpdateTime = 0;
     static long long totalPropagateGrainTime = 0;
     static int profileCount = 0;
+    const double phaseMobility = mConfig.phaseMobility;
+    const double grainMobility = mConfig.grainMobility;
 
     // Increment step counter and record solidification every 100 steps
     stepCounter++;
@@ -288,12 +291,12 @@ void gridField::update(
     #pragma omp parallel for
     for (int idx = 0; idx < totalNodes; idx++) {
         if (nodes.isDeactivated[idx]) continue;
-        nodes.phase[idx] = nodes.phase[idx] - pow((1-nodes.particleComp[idx]),3/2)*(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[idx]*5e-13;
+        nodes.phase[idx] = nodes.phase[idx] - pow((1.0-nodes.particleComp[idx]),1.5)*(mConfig.dt / pow(mConfig.dx,2)) * phaseDiffEn[idx] * phaseMobility;
         double grainHereCount = 0.0;
         float maxGrainPhase = 0.0f;
 
         for (int g = 0; g < nodes.grainsHere[idx]; g++) {
-            nodes.grainPhases[idx][g] = nodes.grainPhases[idx][g] - (mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[idx][g]*3e-14);
+            nodes.grainPhases[idx][g] = nodes.grainPhases[idx][g] - pow((1.0-nodes.particleComp[idx]),1.5)*(mConfig.dt / pow(mConfig.dx,2) * grainDiffEn[idx][g] * grainMobility);
             if (nodes.grainPhases[idx][g] < 0.0) nodes.grainPhases[idx][g] = 0.0;
             if (nodes.grainPhases[idx][g] > 1.0) nodes.grainPhases[idx][g] = 1.0;
             grainHereCount = grainHereCount + pow(nodes.grainPhases[idx][g],2);
@@ -340,10 +343,19 @@ void gridField::update(
 
     auto t1_start = std::chrono::steady_clock::now();
 
-    const double particleMobilityLiquid = 2e-4;
-    const double particleMobilitySolid = 1e-18;
+    const double particleMobilityLiquid = mConfig.particleMobilityLiquid;
+    const double particleMobilitySolid = mConfig.particleMobilitySolid;
     double dx = mConfig.dx;
     double denom = (dx * dx);
+    constexpr double particleMobilitySigmoidSteepness = 10.0;
+    constexpr double particleMobilitySigmoidCenter = 0.75;
+    double sigmoidLow = 1.0 / (1.0 + std::exp(particleMobilitySigmoidSteepness * particleMobilitySigmoidCenter));
+    double sigmoidHigh = 1.0 / (1.0 + std::exp(-particleMobilitySigmoidSteepness * (1.0 - particleMobilitySigmoidCenter)));
+    auto particleMobilityAtPhase = [&](double phase) {
+        phase = std::clamp(phase, 0.0, 1.0);
+        double solidFraction = (1.0 / (1.0 + std::exp(-particleMobilitySigmoidSteepness * (phase - particleMobilitySigmoidCenter))) - sigmoidLow) / (sigmoidHigh - sigmoidLow);
+        return (solidFraction * particleMobilitySolid) + ((1.0 - solidFraction) * particleMobilityLiquid);
+    };
     
     std::vector<double> particleCompChange(totalNodes, 0.0);
     
@@ -354,7 +366,7 @@ void gridField::update(
         double mu = tempPartComp[ptr];
         double sumNeighMu = 0.0;
         int nExist = 0;
-        double selfM = (nodes.phase[ptr] * particleMobilitySolid) + ((1.0 - nodes.phase[ptr]) * particleMobilityLiquid);
+        double selfM = particleMobilityAtPhase(nodes.phase[ptr]);
         double totFlow = 0.0;
         double muFlux = 0.0;
         
@@ -365,10 +377,7 @@ void gridField::update(
 
             if (nbrIdx < totalNodes && nodes.exists[nbrIdx] != 0) {
                 mu_nb = tempPartComp[nbrIdx];
-                mNeigh = 0.5 * (
-                    (nodes.phase[nbrIdx] * particleMobilitySolid + (1.0 - nodes.phase[nbrIdx]) * particleMobilityLiquid)
-                    + selfM
-                );
+                mNeigh = 0.5 * (particleMobilityAtPhase(nodes.phase[nbrIdx]) + selfM);
             }
 
             muFlux = mNeigh * (mu_nb - mu) / (mConfig.thickness2D * pow(dx,2));
@@ -468,16 +477,15 @@ void gridField::update(
             {
                 nodes.homoNucleateHere[ptr] = true;
             }
-            if (!grainExistsLocal &&  nodes.temp[ptr] < mConfig.hetNucUnderCooling && !nodes.hasHetNucleated[ptr]) {
-                double cellVolume = mConfig.dx * mConfig.dx * mConfig.thickness2D;
+            if (!grainExistsLocal && !nodes.hasHetNucleated[ptr]) {
                 double particleVolume = (4.0/3.0) * M_PI * pow(mConfig.particleRadius, 3);
-                double particleFraction = nodes.particleComp[ptr] * cellVolume / particleVolume;
-                if (particleFraction >= 1.0) {
-                    nodes.hetNucleateHere[ptr] = true;
-                    std::cout << "Node " << ptr << " eligible for heterogeneous nucleation. Particle Comp: " << nodes.particleComp[ptr] << std::endl;
-                } else if (particleFraction > 0.0) {
-                    double prob = pow(particleFraction,3);; // simple linear scaling of probability with particle fraction and time step
-                    if (prob_dist(gen) < prob) {
+                // Number of particles (nucleation substrates) in this cell
+                double particleCount = nodes.particleComp[ptr] * cellVolume / particleVolume;
+                if (particleCount > 0.0) {
+                    double hetLambda = particleCount * mConfig.hetNucSitesPerParticle *
+                                       calcHetNucRatePerSite(nodes.temp[ptr], mConfig) * mConfig.dt;
+                    double hetP = (hetLambda < 1e-6) ? hetLambda : 1.0 - exp(-hetLambda);
+                    if (prob_dist(gen) < hetP) {
                         nodes.hetNucleateHere[ptr] = true;
                         std::cout << "Node " << ptr << " eligible for heterogeneous nucleation. Particle Comp: " << nodes.particleComp[ptr] << std::endl;
                     }
@@ -574,8 +582,27 @@ void gridField::recordSolidification() {
     csvFile.close();
 }
 
+// Heterogeneous nucleation rate per site [1/s]: Turnbull-Fisher form
+// nu * exp(-(dG*_het + dG_D) / kT), with the peak spherical-cap-on-substrate
+// barrier dG*_het tabulated at config load.
+double calcHetNucRatePerSite(double temp, const config& modelConf) {
+    const double k  = 1.380649e-23;
+    const double h  = 6.62607015e-34;
+    const double NA = 6.02214076e23;
+    const double R  = 8.314462618;
+
+    if (!(temp > 0.0) || temp >= modelConf.meltTemp) return 0.0;
+
+    double barrier = hetNucPeakBarrier(temp, modelConf);
+    if (!std::isfinite(barrier)) return 0.0;
+
+    double nu = (k * temp) / h;
+    double diffTerm = exp(-modelConf.diffusionActivationEnergy * NA / (R * temp));
+    return nu * diffTerm * exp(-barrier / (k * temp));
+}
+
 // Calculate nucleation rate based on temperature
-float calcNucRate(double temp, const config modelConf) {
+float calcNucRate(double temp, const config& modelConf) {
     // Constants
     const double k  = 1.380649e-23;   // Boltzmann (J/K)
     const double h  = 6.62607015e-34; // Planck (J·s)
